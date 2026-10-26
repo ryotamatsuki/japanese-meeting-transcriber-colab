@@ -1,0 +1,15 @@
+name: Validate notebook
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  notebook-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check notebook without downloading models or audio
+        run: python3 tests/check_notebook.py
