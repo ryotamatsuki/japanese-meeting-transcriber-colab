@@ -1,0 +1,35 @@
+# Recordings / recordings and video
+*.mp3
+*.m4a
+*.wav
+*.flac
+*.ogg
+*.opus
+*.aac
+*.wma
+*.mp4
+*.webm
+*.mov
+
+# Transcription outputs and caches
+transcription_results/
+*文字起こし結果*.zip
+*.srt
+*.csv
+*.zip
+
+# Credentials, local settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+token.txt
+secrets.json
+
+# Notebook/runtime artifacts
+.ipynb_checkpoints/
+__pycache__/
+.pytest_cache/
+*.pyc
+.DS_Store
