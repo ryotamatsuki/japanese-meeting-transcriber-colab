@@ -129,8 +129,10 @@ Colab版の複数ファイル選択・Drive保存・ダウンロードUIはノ�
 
 ## G. GitHub・残課題
 
-Draft PRを作成してレビュー可能にする。mainへのマージは行わない。
-コミットIDはGit履歴、PR URLはこの作業の最終回答を参照（コミットの自己参照を避ける）。
+Draft PR：[PR #1](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/pull/1)。mainにはマージしていない。
+実装・テストの基準コミット：`acf7024b779bd7646f62b288ad64e025ae07dc8c`。
+このコミットのGitHub Actions「Validate notebook」は成功（run ID: `40812647212`）。
+本節の追記のみ、後続のドキュメント更新コミットに含む。
 残課題はGPU依存環境のビルド、Test 1〜6、精度・実測費用・証拠の確定。Stage 1の完了条件のうち、実GPUに関係する項目はすべて未達成。
 
 
@@ -148,4 +150,4 @@ Draft PRを作成してレビュー可能にする。mainへのマージは行�
 | モデルキャッシュ実再利用 | 未完了 |
 | 既存・新規オフラインテスト | 完了 |
 | 実測性能・費用 | 未完了 |
-| Draft PR | 最終回答の作成結果参照 |
+| Draft PR | 完了：Draft PR #1 |
