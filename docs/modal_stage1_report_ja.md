@@ -151,3 +151,12 @@ Draft PR：[PR #1](https://github.com/ryotamatsuki/japanese-meeting-transcriber-
 | 既存・新規オフラインテスト | 完了 |
 | 実測性能・費用 | 未完了 |
 | Draft PR | 完了：Draft PR #1 |
+
+
+## H. 2026-10-29 追加検査・Windows認証ガイド
+
+GPU実行後の`evidence.json`を別途検証する`scripts/validate_evidence.py`を追加した。L4/CUDA/cuDNN/CTranslate2認識、推論・モデルロードの所要時間、GPUメモリ観測、話者分離OFF、モデル・結果キャッシュの整合性をテスト1〜6別に検査できる。合格は**実測証拠の内部整合性のみ**であり、原音声と結果の精度比較やModal利用明細との照合を代替しない。実GPU推論は引き続き未実施。
+
+`tests/test_modal_evidence.py`に合成証拠を用いる9件の回帰テストを追加した（既存の新規8件と合わせて17件）。2026-10-29のGitHub Actions run `40813890342` は成功。Windows PowerShellでの認証・起動方法を`docs/modal_setup_ja.md`に追記。Modalダッシュボード上でログイン済みであることと、CLIトークンの有効化・GPUが起動できることは別問題として扱う。
+
+ブランチ上の追加コミット：`9bd99b4`、`b76c5ca`、`f35b372`。本追記も含め、mainは未変更。
