@@ -83,3 +83,9 @@
 ### English summary
 
 A Google Colab notebook for **Japanese meeting transcription** using Whisper large-v3, with optional speaker diarization via pyannote Community-1. Select one or more audio files without editing file names. Exports TXT, CSV, SRT, JSON and ZIP. Requires a Google Colab runtime; speaker diarization additionally requires accepting the model's access conditions and providing a Hugging Face read token. **Restart the runtime after dependency installation.** Speaker labels are estimates, not verified identities. Do not upload confidential recordings unless authorized.
+
+## Modal GPU移植（Stage 1 / 検証途中）
+
+Colabを使わず `modal run modal_app.py` から同じlarge-v3／Community-1パイプラインを呼び出す構成を追加しています。
+**実GPUでの推論はまだ未検証**です。Web UIや公開APIはありません。
+[セットアップ・Test 1〜6](docs/modal_setup_ja.md)と[実装・検証報告](docs/modal_stage1_report_ja.md)を参照してください。

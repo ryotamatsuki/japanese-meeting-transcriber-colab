@@ -1,0 +1,21 @@
+PASS: notebook clean, 20 cells, Python syntax OK, speaker alignment OK
+test_no_public_endpoint_or_cpu_fallback (test_modal.ModalStructureTests.test_no_public_endpoint_or_cpu_fallback) ... ok
+test_pins_and_notebook_versions (test_modal.ModalStructureTests.test_pins_and_notebook_versions) ... ok
+test_secret_only_on_diarization_function (test_modal.ModalStructureTests.test_secret_only_on_diarization_function) ... ok
+test_result_cache_reuse_and_invalidation (test_transcriber.AsrCacheTests.test_result_cache_reuse_and_invalidation) ... ok
+test_alignment_matches_notebook (test_transcriber.RegressionTests.test_alignment_matches_notebook) ... ok
+test_config_and_token_validation (test_transcriber.RegressionTests.test_config_and_token_validation) ... ok
+test_export_bytes_match_notebook (test_transcriber.RegressionTests.test_export_bytes_match_notebook) ... ok
+test_processor_off_with_inference_doubles (test_transcriber.RegressionTests.test_processor_off_with_inference_doubles) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.082s
+
+OK
+作成: sample_文字起こし結果.zip / 0.0 MiB
+作成: sample_文字起こし結果.zip / 0.0 MiB
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Token missing. Could not authenticate client. If you have token credentials, │
+│ see modal.com/docs/reference/modal.config for setup help. If you are a new   │
+│ user, register an account at modal.com, then run `modal token new`.          │
+╰──────────────────────────────────────────────────────────────────────────────╯
