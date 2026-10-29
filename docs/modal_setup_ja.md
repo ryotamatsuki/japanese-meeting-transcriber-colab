@@ -27,6 +27,19 @@ Modalイメージビルド時にpip checkと全ライブラリのimportを実施
 OSパッケージ・ベースイメージとモデルrevisionは完全固定していないため、バイト単位の環境再現は未保証です。
 実GPUでの整合性確認後、取得したモデルsnapshotとビルド情報を基準に確定してください。
 
+
+Windows PowerShellで実行する場合は、上記の仮想環境作成・有効化を次に置き換えます。
+
+```powershell
+py -3.11 -m venv .venv-modal
+.\\.venv-modal\\Scripts\\Activate.ps1
+python -m pip install modal==1.4.3
+modal token new
+modal token info
+```
+
+認証にはブラウザでのログインが使えますが、`modal run` 自体はPythonとModal CLIが動く端末（ローカルPC、Codespaces等）から実行します。ModalのWebダッシュボードを開いているだけではStage 1のGPU検証は開始されません。
+
 ## 2. テスト音声
 
 `local_audio/two_speakers.wav` に、**公開可能な日本語を2人が交互に発話する30〜60秒程度の自作録音**を置きます。
@@ -102,6 +115,23 @@ python scripts/estimate_cost.py local_runs/04-full/evidence.json --billable-seco
 
 概算は[公式料金](https://modal.com/pricing)（2026-10-29参照）のL4、CPU、8 GiBメモリに基づきます。
 Volumeは `--model-gib` と `--retention-days` で加算可能。無料枠・ネットワーク料金・ビルド費用等は別扱いです。
+
+
+### GPU実行証拠の構造検査（追加）
+
+ZIPの構造検査とは別に、`evidence.json` が本当にL4/CUDA環境を記録し、指定ステージでモデルロードと推論が実行されたか、GPU使用量・経過時間・キャッシュ状態を機械的に点検します。
+
+```bash
+python scripts/validate_evidence.py local_runs/01-gpu/evidence.json --stage gpu
+python scripts/validate_evidence.py local_runs/02-asr/evidence.json --stage asr
+python scripts/validate_evidence.py local_runs/03-diar/evidence.json --stage diarization
+python scripts/validate_evidence.py local_runs/04-full/evidence.json --stage full
+python scripts/validate_evidence.py local_runs/05-off/evidence.json --stage full --off
+python scripts/validate_evidence.py local_runs/06-model-cache/evidence.json --stage full --cache-mode model
+python scripts/validate_evidence.py local_runs/07-result-cache/evidence.json --stage full --cache-mode result
+```
+
+判定は証拠JSONの**構造と内部整合性**についてのみです。実際のクラウド実行を確認するにはModal Dashboardの実行ログ・課金メトリクスを照合します。音声認識精度や話者分離精度を保証するものでもありません。GPUが未起動の場合、検証すべき実測JSON自体が存在しないのでPASSにはなりません。
 
 ## 5. データ保存と削除
 
