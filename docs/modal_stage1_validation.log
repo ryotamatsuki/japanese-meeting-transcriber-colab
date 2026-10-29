@@ -19,3 +19,24 @@ OK
 │ see modal.com/docs/reference/modal.config for setup help. If you are a new   │
 │ user, register an account at modal.com, then run `modal token new`.          │
 ╰──────────────────────────────────────────────────────────────────────────────╯
+
+=== 2026-10-29 Browser continuation (sanitized) ===
+PR #1 head fetched: 50f254bbc25d6bd09031b43cef6e27507ebe9c0f
+git merge --ff-only: PASS
+python tests/check_notebook.py: PASS (20 cells)
+python -m unittest discover -s tests -p 'test_*.py' -v: PASS (17 tests, offline)
+python -m compileall -q transcriber modal_app.py scripts: PASS
+Browser: Modal logged in, workspace ryota-matsuki / main, Starter
+Browser: credits $30.00, cycle usage $0.00, workspace usage limit $30
+Browser: concurrent GPU limit 10, used 0; container limit 100, used 0
+Browser: transcriber-hf absent; creation form prepared, value empty, not submitted
+Browser: HF Community-1 logged out; acceptance status unknown
+Browser: Modal Notebooks sunset; no browser-native notebook execution available
+python -m modal token new: EXIT 1 before auth URL
+Error: Could not connect to the Modal server.
+Modal SDK: 1.4.3; server https://api.modal.com
+socket.getaddrinfo(api.modal.com,443): gaierror
+HTTPS API root: HTTP 415; Modal website: HTTP 200 (not gRPC success)
+GPU build/run: NOT STARTED. Tests 1-6: NOT EXECUTED.
+No execution IDs, GPU outputs, timing or billing evidence produced.
+No billing settings changed; no credentials/audio/results committed.

@@ -163,3 +163,17 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 - https://github.com/SYSTRAN/faster-whisper#gpu
 - https://github.com/meta-pytorch/torchcodec#installing-torchcodec
 - https://pytorch.org/get-started/previous-versions/
+
+
+## CLI接続とブラウザログインを切り分ける（2026-10-29追記）
+
+ブラウザにログイン済みでも、この実行環境では`modal token new`が
+認証URLの発行前に`Could not connect to the Modal server.`で停止した。
+`api.modal.com`の名前解決失敗を確認しており、HF Secret登録とは別の問題である。
+ブラウザCookieやAPIキーをコピーして接続問題を回避しない。
+Modal Notebooksもブラウザでは提供終了と表示され、新規実行の代替には使えない。
+
+通常接続できる本人PCでは、既存のWindows手順で作業ブランチを更新し、
+`python -m modal token new`から認証する。Test 1の成功を先に確認する。
+認証トークンはSDKに保存させ、チャットやログに表示しない。
+HF Secretとモデル利用条件は話者分離用であり、Test 1・ASR・OFFには不要。

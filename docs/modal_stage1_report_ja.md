@@ -160,3 +160,65 @@ GPU実行後の`evidence.json`を別途検証する`scripts/validate_evidence.py
 `tests/test_modal_evidence.py`に合成証拠を用いる9件の回帰テストを追加した（既存の新規8件と合わせて17件）。2026-10-29のGitHub Actions run `40813890342` は成功。Windows PowerShellでの認証・起動方法を`docs/modal_setup_ja.md`に追記。Modalダッシュボード上でログイン済みであることと、CLIトークンの有効化・GPUが起動できることは別問題として扱う。
 
 ブランチ上の追加コミット：`9bd99b4`、`b76c5ca`、`f35b372`。本追記も含め、mainは未変更。
+
+
+## 2026-10-29 ブラウザ確認・CLI認証再試行
+
+今回の開始時にDraft PR #1を取得し、前回の`f9b2690`から
+`50f254bbc25d6bd09031b43cef6e27507ebe9c0f`までfast-forwardした。
+追加の証拠検証スクリプトと9件のテストを取り込み、オフライン17テスト、
+既存ノートブック検査、compileallはすべて成功した。
+
+### ブラウザで確認した状態
+
+- 指定されたEdgeのModalタブを実際に操作した。ログイン済み。
+- Workspace `ryota-matsuki`、環境 `main`、Starterプラン。
+- クレジット残高$30.00、当月使用額$0.00、Workspace usage limit $30。
+- Spend limitは「Set spend limit」表示。変更・追加課金・アップグレードは行っていない。
+- Concurrent GPUs上限10、使用中0。Concurrent containers上限100、使用中0。
+  これらは割当上限であり、L4の確保成功や個別権限の実証ではない。
+- Secrets一覧に`transcriber-hf`は存在しなかった。新規Custom Secret画面で
+  名前`transcriber-hf`、キー`HF_TOKEN`まで入力し、値は空のまま本人入力待ち。
+  Doneは押しておらず、Secretはまだ作成されていない。既存Secretの値は開示していない。
+- Community-1の公式ページを開いたがHugging Faceは未ログイン。
+  アカウントの同意済み・未同意は確認できない。本人ログイン後に条件の確認が必要。
+- ブラウザでの代替実行可否も調べたが、Modal Notebooksは提供終了と表示された。
+
+### CLI側の新しい阻害要因
+
+`python -m modal token new`を正規フローで実行したが、
+認証URLが発行される前に`Could not connect to the Modal server.`でexit 1。
+`socket.getaddrinfo('api.modal.com', 443)`は`gaierror`。
+標準HTTPクライアントからのHTTPS要求はModalトップで200、APIトップで415となり、
+ブラウザ/HTTPの到達性とModal SDKのgRPC接続は区別が必要。
+インストール済みModal 1.4.3の接続実装はgrpclib Channelの直接接続であり、
+今回の実行環境では通常のSDK認証接続が成立していない。
+認証Cookieの抽出・転用、TLS回避、SDK通信経路の改造は行っていない。
+この接続失敗は、本人のModalログイン失敗や残高不足を意味しない。
+
+### 今回の実GPU検証結果
+
+| Test | 結果 | 根拠 |
+|---|---|---|
+| 1 L4/CUDA/import | 未実施 | CLI認証前の接続で停止。イメージビルドなし |
+| 2 large-v3 ASR | 未実施 | Test 1未達、実音声推論なし |
+| 3 Community-1 | 未実施 | 接続に加えHFログイン・Secret設定が未完 |
+| 4 統合出力 | 未実施 | 実推論ZIPなし |
+| 5 話者分離OFF | 未実施 | Secretを参照しない構造は回帰検査のみ |
+| 6 モデル/結果キャッシュ | 未実施 | 実GPU再ロード・再推論なし |
+
+Modal App/Function/Containerの実行識別子、GPU実行ログ、実出力ZIP、
+性能・請求対象時間・実測費用は未取得。Stage 1は引き続き未完了。
+音声・推論結果・認証情報はGitHubへ追加していない。
+
+### 再開に必要な本人操作
+
+1. 開いているCommunity-1ページでHugging Faceにログインし、条件を確認する。
+   同意が必要なら本人が実施する。
+2. Read権限のHFトークンを、準備済みModal Secret画面のValueへ直接入力してDone。
+   トークンをチャットやGitHubへ貼らない。
+3. Modal APIへ通常接続できる本人PC等で、最新の作業ブランチを取得し、
+   `python -m modal token new`の正規認証を実施する。
+   本実行環境のネットワーク制限はHF Secret登録だけでは解消しない。
+4. setupのTest 1をまず実行し、成功してから権利関係の明確な日本語2話者音声でTest 2〜6へ進む。
+   本回は音声準備・転送・実推論まで進んでいない。
