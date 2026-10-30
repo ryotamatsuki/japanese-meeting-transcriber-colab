@@ -55,6 +55,24 @@ class BetaWebTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/jobs',headers=h,json={'filename':'e.exe','size':10}).status_code,400)
         r=self.client.post('/api/jobs',headers=h,json={'filename':'a.wav','size':3});self.assertEqual(r.status_code,200)
         self.assertEqual(self.client.post('/api/jobs',headers=h,json={'filename':'b.wav','size':3}).status_code,429)
+    def test_daily_gpu_quota_survives_job_deletion(self):
+        headers={'X-CSRF':self.auth()}
+        for count in range(4):
+            r=self.client.post('/api/jobs',headers=headers,json={'filename':'public.mp3','size':1})
+            self.assertEqual(r.status_code,200,r.text)
+            id=r.json()['id']
+            self.assertEqual(self.client.put('/api/jobs/'+id+'/chunks?offset=0',headers=headers,content=b'x').status_code,200)
+            self.assertEqual(self.client.post('/api/jobs/'+id+'/finish',headers=headers).status_code,200)
+            state=self.jobs['job:'+id]
+            state['status']='complete'
+            self.jobs['job:'+id]=state
+            self.assertEqual(self.client.delete('/api/jobs/'+id,headers=headers).status_code,200)
+        r=self.client.post('/api/jobs',headers=headers,json={'filename':'fifth.mp3','size':1})
+        self.assertEqual(r.status_code,200,r.text)
+        id=r.json()['id']
+        self.client.put('/api/jobs/'+id+'/chunks?offset=0',headers=headers,content=b'x')
+        self.assertEqual(self.client.post('/api/jobs/'+id+'/finish',headers=headers).status_code,429)
+
     def test_login_rate_limit(self):
         for _ in range(5):
             self.assertEqual(self.client.post('/login',data={'password':'bad'}).status_code,401)
