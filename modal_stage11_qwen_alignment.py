@@ -16,7 +16,7 @@ image=(modal.Image.debian_slim(python_version='3.11')
        .pip_install('qwen-asr==0.0.6','nagisa==0.2.11')
        .env({'HF_HOME':'/models/hf','HF_HUB_CACHE':'/models/hf/hub',
              'HF_HUB_DISABLE_TELEMETRY':'1'})
-       .add_local_python_source('scripts'))
+       .add_local_python_source('scripts','transcriber'))
 
 
 @app.function(image=image,gpu='A10',cpu=2,memory=8192,timeout=1300,
