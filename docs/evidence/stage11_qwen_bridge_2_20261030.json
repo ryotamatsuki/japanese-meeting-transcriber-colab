@@ -1,0 +1,53 @@
+{
+  "attempted": 2,
+  "complete": 2,
+  "failed": [],
+  "human_reference": "IngCrowd Japanese 2-speaker ELAN, CC BY-NC 4.0; noncommercial evaluation",
+  "models": [
+    "Qwen/Qwen3-ASR-1.7B",
+    "Qwen/Qwen3-ForcedAligner-0.6B",
+    "pyannote/speaker-diarization-community-1"
+  ],
+  "no_web_or_production_code_changes": true,
+  "per_record": [
+    {
+      "eaf_sha256": "c59daa71d0ffa34e50b4c532d33f5c0d2a51ceaa8aea4435a68a87d924f61b32",
+      "audio_duration_seconds": 675.776,
+      "reference_characters": 4166,
+      "qwen_flattened_cer_percent": 22.707633221315408,
+      "qwen_attributed_cpcer_percent": 26.812289966394626,
+      "qwen_speaker_count": 2,
+      "utterances": 176,
+      "aligned_tokens": 2095,
+      "text_preserved": true,
+      "last_word_end_seconds": 675.259,
+      "qwen_alignment_seconds": 59.876729743000006,
+      "qwen_model_load_seconds": 8.565283774000001,
+      "model": "Qwen/Qwen3-ASR-1.7B",
+      "aligner": "Qwen/Qwen3-ForcedAligner-0.6B",
+      "diarizer": "pyannote/speaker-diarization-community-1 exclusive",
+      "license": "IngCrowd CC BY-NC 4.0; noncommercial",
+      "warning": "Small experiment. Separate GPU Qwen and diar calls; not Web end-to-end or 60-minute validation."
+    },
+    {
+      "eaf_sha256": "e728b5e9cc74c91dfc2541dee1a404f98e3ff1b71b744512e4622d57a1dd5bdd",
+      "audio_duration_seconds": 736.0853125,
+      "reference_characters": 4460,
+      "qwen_flattened_cer_percent": 33.408071748878925,
+      "qwen_attributed_cpcer_percent": 40.82959641255605,
+      "qwen_speaker_count": 2,
+      "utterances": 115,
+      "aligned_tokens": 2091,
+      "text_preserved": true,
+      "last_word_end_seconds": 734.661,
+      "qwen_alignment_seconds": 60.25213894800001,
+      "qwen_model_load_seconds": 8.813755036999998,
+      "model": "Qwen/Qwen3-ASR-1.7B",
+      "aligner": "Qwen/Qwen3-ForcedAligner-0.6B",
+      "diarizer": "pyannote/speaker-diarization-community-1 exclusive",
+      "license": "IngCrowd CC BY-NC 4.0; noncommercial",
+      "warning": "Small experiment. Separate GPU Qwen and diar calls; not Web end-to-end or 60-minute validation."
+    }
+  ],
+  "median_cpcer_percent": 33.82094318947534
+}
