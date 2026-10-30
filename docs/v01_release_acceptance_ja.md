@@ -17,9 +17,9 @@
 | 1. Webワークフロー | 音声投入→進捗→音声再生→編集→保存→出力→削除が実環境HTTPS APIで音声→進捗→再生用音声取得→修正→保存→ZIP→削除を完走 | Actions Runs 41022519388・41022846766 | **HTTPS API E2E PASS／ブラウザ手動操作は未実施** |
 | 2. 1時間の入力 | 実際の60分音声で完走し、最後まで発話区間欠落なし | A10 Run 41019777172: 合成反復音声3598.336秒、最終ASR終了3598.11秒 | **合成試験PASS／実会議未検証** |
 | 3. 性能 | 60分音声を待機・転送込み30分以内 | A10合成試験 pipeline 497.0秒、CLI側総時間537.6秒 | **合成GPU試験PASS／Web E2E未検証** |
-| 4. 安定性 | 異なる公開録音10件連続で異常終了0件、成果物欠損0件 | 実GPU/ Web tests | 未検証 |
-| 5. 文字精度 | 現代日本語会議の逐語参照に対するCER中央値15%以下（暫定目標） | 録音/RTTM/参照を固定 | 未検証 |
-| 6. 話者精度 | 正解話者区間付き現代日本語2〜4話者会議でDER中央値30%以下（暫定目標） | collar=0、overlap=include等の設定 | 未検証 |
+| 4. 安定性 | 異なる公開録音10件連続で異常終了0件、成果物欠損0件 | A10 Run 41027370025、IngCrowd自然日本語2人対話10録音 | **GPU CLI 10/10 PASS／Web経由10件は未検証** |
+| 5. 文字精度 | 現代日本語会議の逐語参照に対するCER中央値15%以下（暫定目標） | IngCrowd 10件のELAN簡易全文CER中央値39.907% | **未達。重複発話を含む全文連結CERでありcpCERではない** |
+| 6. 話者精度 | 正解話者区間付き現代日本語2〜4話者会議でDER中央値30%以下（暫定目標） | IngCrowd 2話者10件、oracle話者数2、collar0/overlap含む：DER中央値32.124%、JER34.215% | **2話者の暫定基準未達。3〜4話者別途評価要** |
 | 7. 効率 | 人手文字起こしより仕上げ完了時間を50%以上短縮 | 同一録音での人手タイムスタンプ | 未検証 |
 | 8. 安全性 | 未認証/CSRF/不正入力に対する拒否、ランダムID、ログに音声なし、24時間消去、月額課金監視 | Web APIテストと隔離実環境HTTPS E2E | **認証・CSRF・明示削除 PASS／期限後自動削除・費用監視は未検証** |
 
@@ -84,3 +84,22 @@ modal deploy beta_modal.py
 - それぞれの生Artifactと独立計算SHA256を一致確認：OFF `46907adb9ca024523a044d11ccc4f5ca8b3f756e644dc0923e309959f93c2e6d`、ON `bee535557f24bc4a61cfcf9357b0df23969b9dbfef6fbe4a2ffec975c6e8d569`。
 - GitHub ActionsでのArtifact保持期限は2026-11-06。期限後も再検証できるようChatGPT Library`/AI開発/日本語会議文字起こし/Stage1_A10_20261030/v01_E2E_ASR_only_20261030.zip`、`v01_E2E_speaker_on_20261030.zip`へ保存済み。
 - **現時点で外部利用者向けの永続Webサービスはデプロイしていない。** 試験URLは環境の削除により無効。限定利用に向けた認証情報は利用者自身がModal Secretに設定する必要がある。
+
+
+## 2026-10-30 日本語10対話・人手ELANの独立評価
+
+- [A10 GPU run 41027370025](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41027370025) 全ステップ成功、処理失敗0/10。
+- コーパス [IngCrowd/japanese-themed-dialogue](https://huggingface.co/datasets/IngCrowd/japanese-themed-dialogue)、10本・120分52秒・人手ELAN付・2話者。**CC BY-NC 4.0・非商用評価のみ**。10組の異なる話者ではないこと、行政会議の音声ではないことに注意。
+- Artifact `12965191701`、SHA-256 `971ad447a5b6865c4a03e804e52a374f78c34e3a1f8f0ccf53e7e046f667bd80`、期限2026-11-06 17:51:24 JST。元ArtifactをChatGPT Library `/AI開発/日本語会議文字起こし/Stage1_A10_20261030/ingcrowd_10dialogues_metrics_20261030.zip` へ保全。
+- ASR: Whisper large-v3 beam5。Community-1話者数既知2で固定。原ミックスWAVをモノラルmp3 48kbpsに圧縮して推論。
+- **CER中央値39.907%、DER中央値32.124%、JER中央値34.215%、1録音あたりGPU pipeline約60秒。** 品質目標CER15%以下・DER30%以下は未達。
+- 前半4対話（女性・男性）の平均DER19.415%、後半6対話（女性同士）平均DER33.438%。話者構成と会話・録音条件等が同時に異なるため因果的な話者属性効果は断定しない。
+- **CERは重複発話を含む人手ELAN発言の開始時刻順連結と単一ASR列との簡易距離**。重複発話の不一致で大きくなり得るため、通常CER・cpCERと混同しない。
+- 音声・逐語転写本文はGitHub・Libraryへ保存せず、数値指標とELAN SHA256だけを保存。再現手順は`docs/ingcrowd_10dialogue_protocol_20261030.md`。
+
+## 2026-10-30 60分 Web経由の初回負荷実行：失敗したゲート
+
+- [GitHub Run 41026648129](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41026648129) は **失敗**。約3595秒の反復公開音声を、分割HTTPアップロードから実GPU推論し、2話者・音声末尾の発話・保存前の行取得まで通過。しかし全発言をWeb APIから一括修正保存する箇所でHTTP非200。ZIP出力・明示削除までのE2Eを完遂できなかった。
+- 失敗時、試験専用Modal環境の削除は成功。推論モデルの精度が不合格だったという意味ではない。
+- FastAPIで合成1200発言の一括編集・ZIP・削除が通る回帰試験を追加し、CI成功。次の隔離実環境で数値だけの保存失敗診断を行う。本文や秘密値はログに残さない。
+- **60分Web E2Eは未達のまま**。診断と修正後に同条件で再試験を通過するまで公開不可。
