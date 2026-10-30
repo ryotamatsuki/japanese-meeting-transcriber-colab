@@ -76,7 +76,15 @@ def normalize_edits(raw, duration: float):
             raise ValueError("Invalid transcript fields")
         if not who.strip():
             who = '話者未設定'
-        out.append({'start': round(s, 3), 'end': round(e, 3), 'speaker': who.strip(), 'text': text})
+        start_ms, end_ms = round(s, 3), round(e, 3)
+        # Original s<e has been validated. Preserve a positive but sub-ms
+        # interval that would otherwise become invalid after rounding.
+        if start_ms == end_ms:
+            end_ms = round(start_ms + 0.001, 3)
+            if end_ms > duration + 0.5:
+                raise ValueError("Timestamps out of range after rounding")
+        out.append({'start': start_ms, 'end': end_ms,
+                    'speaker': who.strip(), 'text': text})
     out.sort(key=lambda r: (r['start'], r['end']))
     # Do not require non-overlap: real speakers may talk simultaneously.
     return out

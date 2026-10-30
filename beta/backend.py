@@ -216,8 +216,16 @@ class FileBackend:
             # Never delete a file a GPU worker may be reading.
             raise StoreError('Processing is active. Delete after completion.',409)
         self.refresh()
-        shutil.rmtree(self._path(id),ignore_errors=True)
-        self.commit()
+        folder=self._path(id)
+        # A failed physical delete must not be acknowledged as success.
+        try:
+            if folder.exists():
+                shutil.rmtree(folder)
+            if folder.exists():
+                raise OSError('Job directory still exists')
+            self.commit()
+        except OSError as exc:
+            raise StoreError('Stored recording could not be deleted',500) from exc
         job['status']='deleted'
         self.state['job:'+id]=job
         self.state['job_index']=[k for k in self.state.get('job_index',[]) if k!=id]
