@@ -37,11 +37,19 @@ def infer_chunk(model, waveform, offset, *, sample_rate=16000, max_retries=2):
             raise ValueError('Aligned token list missing')
         if normalized_ja(text)!=normalized_ja(''.join(x['text'] for x in items)):
             raise ValueError('Qwen aligner changed recognized text')
+        last_start=-1.0
         for item in items:
             a,b=item['start_time'],item['end_time']
+            token=str(item['text'])
+            # Mirror qwen_segments' full validation *before* returning a
+            # chunk. Otherwise one bad token would invalidate an entire hour
+            # only after all GPU inference had finished.
             if not (math.isfinite(a) and math.isfinite(b)
-                    and 0<=a<=b<=seconds+0.8):
+                    and 0<=a<=b<=seconds+0.8 and
+                    a+0.04>=last_start and token.strip()
+                    and a<seconds):
                 raise ValueError('Invalid token timing')
+            last_start=a
         return [{'offset_sec':float(offset),'duration_sec':seconds,
                  'text':text,'items':items}],{'retries':0,'lexical_repair':int(repaired)}
     except (ValueError,AttributeError,TypeError):

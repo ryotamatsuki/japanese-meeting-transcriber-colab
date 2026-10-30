@@ -56,6 +56,36 @@ class QwenChunkRecoveryTests(unittest.TestCase):
             infer_chunk(model,self.audio,0)
         self.assertEqual(model.calls,3)
 
+    def test_nonmonotonic_token_starts_retry_early(self):
+        class Reordered(Fake):
+            def transcribe(self,*,audio,language,return_time_stamps):
+                samples,sr=audio
+                self.calls+=1
+                s=len(samples)/sr
+                items=([SimpleNamespace(text='は',start_time=1.0,end_time=1.5),
+                        SimpleNamespace(text='い',start_time=0.5,end_time=1.0)]
+                       if s>20 else
+                       [SimpleNamespace(text='はい',start_time=0.,end_time=1.)])
+                return [SimpleNamespace(text='はい',time_stamps=SimpleNamespace(items=items))]
+        model=Reordered(30)
+        rows,meta=infer_chunk(model,self.audio,0)
+        self.assertEqual(len(rows),2)
+        self.assertEqual(meta['retries'],1)
+
+    def test_out_of_bounds_final_token_is_not_silently_dropped(self):
+        class Overrun(Fake):
+            def transcribe(self,*,audio,language,return_time_stamps):
+                samples,sr=audio
+                self.calls+=1
+                s=len(samples)/sr
+                a=(s+0.1 if s>20 else 0.)
+                return [SimpleNamespace(text='はい',time_stamps=SimpleNamespace(items=[
+                    SimpleNamespace(text='はい',start_time=a,end_time=a+0.2)]))]
+        model=Overrun(30)
+        rows,meta=infer_chunk(model,self.audio,0)
+        self.assertEqual(len(rows),2)
+        self.assertEqual(meta['retries'],1)
+
     def test_rejects_invalid_bounds(self):
         with self.assertRaises(ValueError):
             infer_chunk(Fake(30),self.audio,-1)
