@@ -38,6 +38,11 @@ def analyze_overlap_clip(mixed_wav:bytes,track1_wav:bytes,track2_wav:bytes,
     import soundfile as sf
     import torch
     from scipy.signal import resample_poly
+    # SpeechBrain 1.0.3 references a torchaudio API removed from recent torch builds.
+    # Only the backend availability query is patched; no audio loader logic is replaced.
+    import torchaudio
+    if not hasattr(torchaudio,'list_audio_backends'):
+        torchaudio.list_audio_backends=lambda: ['ffmpeg']
     from speechbrain.inference.separation import SepformerSeparation
     from faster_whisper import WhisperModel
     from scripts.evaluate_attributed_transcript import permutation_cer
