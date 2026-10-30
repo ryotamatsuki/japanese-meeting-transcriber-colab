@@ -52,3 +52,28 @@
 - 本評価は別ブランチ `experiment/diarization-quality-20261030` で実施。主PRのモデル、既存デフォルト、国文祭PoC main/本番Appは変更しない。
 - 元のA10比較ArtifactとAMIベンチマークArtifactはChatGPT Library `/AI開発/日本語会議文字起こし/Stage1_A10_20261030/` に期限に依存しない形で保全。
 - 音声・本人の認証情報はGitHubに保存せず、元の結果・補正履歴も別々に保持。
+
+## AMI独立時間帯によるホールドアウト評価（追加）
+
+[実行run 41014374538](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41014374538)。AMI ES2004aの420–480秒を切り出し、参照RTTMの**実際の話者数3人**に合わせて`--expected-speakers 3`でA10推論。厳格な採点（collar=0, skip_overlap=False）。
+
+| 方法 | DER | JER |
+|---|---:|---:|
+| exclusive補正前 | 48.2280% | 61.0901% |
+| exclusive 100ms補正 | 48.2280% | 61.0901% |
+| regular（重複あり） | 46.6916% | 59.6792% |
+
+この区間では補正候補0件。したがって補正前後は同一。別途4人に誤固定した予備run `41014196441` は話者数設定が不適切なため最終精度評価から除外した。
+
+**2区間・計120秒の集計：** `pyannote.metrics` で区間ごとの最適な話者ID対応を独立に求め、累積採点した値。
+
+| 方法 | DER集計 | JER集計 |
+|---|---:|---:|
+| exclusive補正前 | 53.2382% | 67.5172% |
+| exclusive 100ms補正 | 53.2025% | 67.5425% |
+| regular（重複あり） | 50.2010% | 64.7437% |
+
+**採用判定：100ms補正はDER改善がごく小さくJERは悪化するため、デフォルト有効化はしない。** raw/regularは両区間で優れたDER/JERを示したが、同一会議の短い抜粋で、話者数は正解人数を指定している。別会議・現代日本語への一般化は未証明。重複を保持するregularを単一のWhisper文字列に直接置換するのは不適切。
+
+- ホールドアウトArtifact `12959500475`、SHA-256 `06fd26692838a5308829df3b32f7c945e4a781c9c7ac63102f99ec535ffa8784`。
+- 元の2人固定、京都方言の品質実験、AMIの正解RTTM付き2区間の未改変Artifact、集計JSON、監査レポートをChatGPT Library `/AI開発/日本語会議文字起こし/Stage1_A10_20261030/diarization_quality_evidence_20261030.zip` に保全。元音声・Secretsは含めていない。
