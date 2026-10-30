@@ -91,6 +91,28 @@ def main():
             observed={row['speaker'] for row in rows if row['speaker'] not in ('話者未設定','話者不明')}
             expect(len(observed)==2, 'Diarization-on did not produce two speaker labels')
             results['detected_speakers']=len(observed)
+        if diar:
+            review_response=client.get(f'/api/jobs/{job}/review')
+            expect(review_response.status_code==200, 'Overlap review endpoint failed')
+            review=review_response.json()
+            expect(review['available'], 'New diarization job did not produce overlap review estimates')
+            count=len(review['windows'])
+            results['overlap_review_candidates']=count
+            results['overlap_review_total']=review['total_candidates']
+            if os.environ.get('BETA_REQUIRE_OVERLAP_CANDIDATES','0')=='1':
+                expect(count>0,'Known-overlapping two-speaker audio yielded no review windows')
+            if count:
+                first=review['windows'][0]
+                expect(first['speaker_count']>=2 and first['start']<first['end'], 'Malformed overlap candidate')
+                put=client.put(f"/api/jobs/{job}/review/{first['id']}",
+                               headers=headers,json={'reviewed':True})
+                expect(put.status_code==200,'Could not mark overlap candidate reviewed')
+                again=client.get(f'/api/jobs/{job}/review').json()
+                expect(first['id'] in again['reviewed_ids'], 'Review status did not persist')
+                put=client.put(f"/api/jobs/{job}/review/{first['id']}",
+                               headers=headers,json={'reviewed':False})
+                expect(put.status_code==200,'Could not undo overlap review check')
+                results['overlap_review_mark_and_reopen']=True
         results['gpu_job_completed']=True
         r=client.get(f'/api/jobs/{job}/audio',headers={'Range':'bytes=0-1023'})
         expect(r.status_code in (200,206),'Audio playback fetch failed')
