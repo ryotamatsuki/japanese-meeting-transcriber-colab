@@ -112,17 +112,20 @@ def evaluate(eaf_path: Path, original_zip: Path):
     full=permutation_cer(reference,hypothesis)
     buckets=localized_rows(reference,hypothesis)
     # No ungrounded claims from naive overlapped utterance text buckets.
-    overlap=permutation_cer(buckets['reference_overlap'],buckets['hypothesis_overlap'])
-    other=permutation_cer(buckets['reference_other'],buckets['hypothesis_other'])
+    # Don't compute overlap-only "cpCER": many ELAN turns straddle speech
+    # overlaps and the whole-utterance bucket will include non-overlap text.
+    # Initial metric-only pilot established that this produces unstable scores.
+    # Report annotation incidence and speech time instead; per-word overlap
+    # accuracy requires reliable word-level human reference alignment.
     return {'eaf_sha256':eaf_sha,'reference_turns':len(reference),
             'hypothesis_utterances':len(hypothesis),'full_cpcer':full,
-            'overlap_proxy_cpcer':overlap,'nonoverlap_proxy_cpcer':other,
             'human_overlap_seconds':round(buckets['human_overlap_seconds'],3),
             'overlap_regions':buckets['overlap_count'],
-            'overlap_reference_turns':len(buckets['reference_overlap']),
-            'overlap_hypothesis_utterances':len(buckets['hypothesis_overlap']),
+            'overlap_reference_turns_touched':len(buckets['reference_overlap']),
+            'overlap_hypothesis_utterances_touched':len(buckets['hypothesis_overlap']),
             'reference_license':'IngCrowd CC BY-NC 4.0 noncommercial',
-            'warning':'Time-localized overlap subset is a coarse utterance-level proxy; cpCER uses global speaker permutation, not time-local speaker accuracy or cpWER.'}
+            'overlap_text_score':None,
+            'warning':'Overlap/non-overlap cpCER intentionally NOT scored: utterance spans straddle overlap windows, invalidating text partition. Need word-level human reference for precise overlap ASR metrics.'}
 
 
 def main():
@@ -138,8 +141,7 @@ def main():
                       'reference_turns':record['reference_turns'],
                       'hypothesis_utterances':record['hypothesis_utterances'],
                       'cpcer':record['full_cpcer']['cpcer'],
-                      'overlap_proxy_cpcer':record['overlap_proxy_cpcer']['cpcer'],
-                      'other_proxy_cpcer':record['nonoverlap_proxy_cpcer']['cpcer'],
+                      'overlap_text_score':None,
                       'reference_overlap_seconds':record['human_overlap_seconds']},sort_keys=True))
 
 
