@@ -67,10 +67,10 @@ def main():
                 page=context.new_page()
                 errors=[]
                 page.on('pageerror',lambda error:errors.append(str(error)))
-                page.goto(f'http://127.0.0.1:{port}/login')
+                page.goto(f'http://localhost:{port}/login')
                 page.locator('input[name=password]').fill(pw)
                 page.get_by_role('button',name='ログイン').click()
-                page.wait_for_url(f'http://127.0.0.1:{port}/')
+                page.wait_for_url(f'http://localhost:{port}/')
                 page.get_by_role('button',name='編集する').click()
                 review=page.locator('#overlapReview')
                 review.wait_for(state='visible')
