@@ -42,7 +42,7 @@ def export(job, root, config, asr_settings, diar_settings):
     report = {'source_filename': job['path'].name, 'source_sha256': job['sha256'], 'asr_settings': ASR_SETTINGS, 'diarization_enabled': ENABLE_DIARIZATION, 'diarization_settings': DIAR_SETTINGS if ENABLE_DIARIZATION else None, 'asr_segments': len(job['asr_segments']), 'word_intervals': job['word_count'], 'diarization_intervals': len(job['diar_segments']), 'estimated_speakers': len(speakers), 'utterances': len(rows), 'note': '機械処理結果。発言者の同一性、事業名、発言内容は必ず原音声と照合してください。'}
     report_path = outdir / '処理レポート.json'
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
-    outputs = [txt, csv_path, srt, mapping, outdir / 'whisper_asr.json', report_path]
+    outputs = [txt, csv_path, srt, mapping, outdir / job.get('asr_json_name', 'whisper_asr.json'), report_path]
     if ENABLE_DIARIZATION:
         outputs.extend([outdir / 'pyannote_話者区間.csv', outdir / 'pyannote_話者区間.json'])
         if config.overlap_review and not config.quality_experiment:
