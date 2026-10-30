@@ -45,6 +45,10 @@ def export(job, root, config, asr_settings, diar_settings):
     outputs = [txt, csv_path, srt, mapping, outdir / 'whisper_asr.json', report_path]
     if ENABLE_DIARIZATION:
         outputs.extend([outdir / 'pyannote_話者区間.csv', outdir / 'pyannote_話者区間.json'])
+        if config.overlap_review and not config.quality_experiment:
+            p = outdir / 'pyannote_重複発話確認候補.json'
+            if p.exists():
+                outputs.append(p)
         # Experimental diagnostic files: never present in baseline output ZIPs.
         if config.quality_experiment:
             for name in ('pyannote_通常話者区間.json', 'pyannote_補正前話者区間.json', 'pyannote_重複発話確認候補.json', '話者割当て要確認.json'):

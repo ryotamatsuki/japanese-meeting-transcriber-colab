@@ -36,8 +36,42 @@ $('upload').addEventListener('submit',async ev=>{
 async function openEditor(id){
   try{const job=await call('/api/jobs/'+id), r=await call('/api/jobs/'+id+'/rows');current=id;edits=r.rows.map(x=>({...x}));
     $('editor').hidden=false;$('player').src='/api/jobs/'+id+'/audio';$('download').href='/api/jobs/'+id+'/download';
-    renderRows();$('editor').scrollIntoView({behavior:'smooth'});
+    renderRows();await loadOverlapReview(id);$('editor').scrollIntoView({behavior:'smooth'});
   }catch(e){$('editstatus').textContent=e.message;}
+}
+async function loadOverlapReview(id){
+  const section=$('overlapReview'), root=$('overlapWindows');
+  section.hidden=true;root.replaceChildren();$('overlapSummary').textContent='';
+  const review=await call('/api/jobs/'+id+'/review');
+  if(current!==id||!review.available||!review.windows.length)return;
+  const reviewed=new Set(review.reviewed_ids);
+  const summary=$('overlapSummary');
+  const updateSummary=()=>{summary.textContent=`要確認 ${review.windows.length}区間 / 確認済み ${reviewed.size}区間`+
+    (review.total_candidates>review.windows.length?'（表示上限により一部省略）':'');};
+  updateSummary();
+  for(const w of review.windows){
+    const item=document.createElement('div');item.className='overlap-candidate'+(reviewed.has(w.id)?' reviewed':'');
+    const time=document.createElement('time');
+    time.textContent=`${fmt(w.start)} ～ ${fmt(w.end)}`;
+    const play=button('▶ この区間を聞く',()=>{$('player').currentTime=Math.max(0,w.start-1);$('player').play();});
+    const focus=button('発言行へ',()=>{
+      const idx=edits.findIndex(r=>r.start<w.end && w.start<r.end);
+      if(idx>=0){const row=document.querySelector(`.utterance[data-index="${idx}"]`);if(row){row.scrollIntoView({behavior:'smooth',block:'center'});row.classList.add('overlap-focus');row.querySelector('textarea')?.focus();}}
+    });
+    const mark=document.createElement('input');mark.type='checkbox';mark.checked=reviewed.has(w.id);
+    mark.setAttribute('aria-label',time.textContent+' 確認済み');
+    mark.onchange=async()=>{
+      mark.disabled=true;
+      try{await call('/api/jobs/'+id+'/review/'+w.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({reviewed:mark.checked})});
+        if(mark.checked)reviewed.add(w.id);else reviewed.delete(w.id);
+        item.classList.toggle('reviewed',mark.checked);updateSummary();
+      }catch(e){mark.checked=!mark.checked;$('editstatus').textContent='確認状態の保存に失敗: '+e.message;}
+      mark.disabled=false;
+    };
+    const label=document.createElement('label');label.append(mark,document.createTextNode('確認済み'));
+    item.append(time,play,focus,label);root.append(item);
+  }
+  section.hidden=false;
 }
 function renderRows(){const root=$('rows');root.replaceChildren();
  edits.forEach((r,i)=>{

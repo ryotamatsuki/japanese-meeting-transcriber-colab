@@ -42,6 +42,7 @@ def transcribe_job(job_id: str, extension: str, diarization: bool, speakers: int
     import json
     import tempfile
     from beta.core import valid_job_id, parse_original_archive
+    from beta.review import review_candidates_from_archive
     from transcriber.processor import Config, process
     if not valid_job_id(job_id) or extension not in ('.mp3','.m4a','.wav','.flac','.ogg','.mp4','.webm'):
         raise ValueError('Invalid job identifier or audio extension')
@@ -57,16 +58,19 @@ def transcribe_job(job_id: str, extension: str, diarization: bool, speakers: int
         if not audio.is_file() or audio.stat().st_size!=job['expected_size']:
             raise ValueError('Source audio missing or inconsistent')
         config=Config(enable_diarization=diarization,expected_speakers=speakers,
-                      language='ja',quality_experiment=False,asr_beam_size=5)
+                      language='ja',quality_experiment=False,overlap_review=diarization,asr_beam_size=5)
         # The input is read from shared storage, not passed as an oversized RPC argument.
         with tempfile.TemporaryDirectory(prefix='transcriber-beta-') as tmp:
             archive,metrics=process(audio,Path(tmp)/'results','/models/whisper',config,
                                      token=os.environ.get('HF_TOKEN') if diarization else None,
                                      stage='full')
             weights.commit()
-            parsed=parse_original_archive(archive.read_bytes())
+            raw_archive=archive.read_bytes()
+            parsed=parse_original_archive(raw_archive)
+            review=review_candidates_from_archive(raw_archive,job['duration'])
             folder=Path('/data/jobs')/job_id
-            (folder/'original.zip').write_bytes(archive.read_bytes())
+            (folder/'original.zip').write_bytes(raw_archive)
+            (folder/'review_candidates.json').write_text(json.dumps(review,ensure_ascii=False),encoding='utf-8')
             (folder/'results.json').write_text(json.dumps(parsed['rows'],ensure_ascii=False),encoding='utf-8')
             # Only aggregate technical metrics; no transcript text or model token.
             (folder/'metrics.json').write_text(json.dumps(metrics,ensure_ascii=False),encoding='utf-8')

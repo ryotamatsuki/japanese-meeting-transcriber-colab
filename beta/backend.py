@@ -170,6 +170,42 @@ class FileBackend:
         self.commit()
         return valid
 
+    def review_windows(self,id):
+        job=self.info(id)
+        if job['status']!='complete':
+            raise StoreError('Results not ready',409)
+        self.refresh()
+        folder=self._path(id)
+        p=folder/'review_candidates.json'
+        if not p.is_file():
+            return {'available':False,'total_candidates':0,'windows':[],'reviewed_ids':[],
+                    'warning':'This recording was processed without overlap review.'}
+        stored=json.loads(p.read_text(encoding='utf-8'))
+        review_file=folder/'review_checked.json'
+        reviewed=json.loads(review_file.read_text(encoding='utf-8')) if review_file.is_file() else []
+        allowed={w['id'] for w in stored['windows']}
+        return {**stored,'reviewed_ids':sorted(set(reviewed)&allowed)}
+
+    def set_reviewed(self,id,window_id,reviewed):
+        if type(reviewed) is not bool:
+            raise StoreError('reviewed must be boolean')
+        if not isinstance(window_id,str):
+            raise StoreError('Invalid candidate ID',400)
+        record=self.review_windows(id)
+        if window_id not in {x['id'] for x in record['windows']}:
+            raise StoreError('Candidate not found',404)
+        checked=set(record['reviewed_ids'])
+        if reviewed:
+            checked.add(window_id)
+        else:
+            checked.discard(window_id)
+        file=self._path(id)/'review_checked.json'
+        draft=file.with_suffix('.new')
+        draft.write_text(json.dumps(sorted(checked)),encoding='utf-8')
+        draft.replace(file)
+        self.commit()
+        return {'id':window_id,'reviewed':reviewed,'reviewed_count':len(checked)}
+
     def get_download(self,id):
         job=self.info(id)
         return build_export(self.read_rows(id),source_name=job['filename'])

@@ -190,6 +190,26 @@ def create_app(backend, *, password: str, session_secret: str):
         except (KeyError,ValueError,TypeError):
             raise HTTPException(400,'Invalid transcript payload') from None
 
+    @app.get('/api/jobs/{id}/review')
+    def get_review(req:Request,id:str):
+        require_auth(req)
+        return safe(backend.review_windows,id)
+
+    @app.put('/api/jobs/{id}/review/{window_id}')
+    async def set_review(req:Request,id:str,window_id:str):
+        require_write(req)
+        payload=await req.body()
+        if len(payload)>128:
+            raise HTTPException(413,'Review update too large')
+        try:
+            body=__import__('json').loads(payload)
+            if set(body)!={'reviewed'} or type(body['reviewed']) is not bool:
+                raise ValueError('Invalid review flag')
+        except (ValueError,TypeError,KeyError):
+            raise HTTPException(400,'Invalid review flag') from None
+        async with lock:
+            return safe(backend.set_reviewed,id,window_id,body['reviewed'])
+
     @app.get('/api/jobs/{id}/download')
     def download(req:Request,id:str):
         require_auth(req)
