@@ -20,12 +20,15 @@ def expect(condition, label):
 def main():
     url=os.environ['BETA_SMOKE_URL'].strip()
     pwd=os.environ['BETA_SMOKE_PASSWORD']
-    path=Path('local_audio/kyoto_two_speakers.ogg')
+    path=Path(os.environ.get('BETA_SMOKE_AUDIO_PATH','local_audio/kyoto_two_speakers.ogg'))
+    min_duration=float(os.environ.get('BETA_SMOKE_MIN_DURATION_SECONDS','0'))
+    max_polls=int(os.environ.get('BETA_SMOKE_MAX_POLLS','140'))
+    expect(0 <= min_duration <= 3600 and 10 <= max_polls <= 600, 'Invalid test limits')
     expect(url.startswith('https://') and url.endswith('.modal.run'),'Invalid isolated HTTPS URL')
     expect(path.is_file(),'Missing public test recording')
     started=time.monotonic()
     diar=os.environ.get('BETA_SMOKE_DIARIZATION','0')=='1'
-    results={'diarization_enabled':diar}
+    results={'diarization_enabled':diar, 'long_form':min_duration>0, 'audio_size_bytes':path.stat().st_size}
     with httpx.Client(base_url=url,timeout=90.0,follow_redirects=False) as client:
         r=client.get('/api/jobs')
         expect(r.status_code==401,'Unauthenticated API must be denied')
@@ -56,7 +59,7 @@ def main():
         expect(r.json()['status'] in ('queued','running','complete'),'Unexpected state after launch')
         results['upload_and_queue']=True
         last=''
-        for _ in range(140):
+        for _ in range(max_polls):
             r=client.get('/api/jobs/'+job)
             expect(r.status_code==200,'Job status inaccessible')
             status=r.json()['status']
@@ -69,11 +72,21 @@ def main():
         else:
             raise AssertionError('GPU inference timed out in smoke')
         expect(status=='complete','GPU job did not complete (status='+status+')')
+        job_result=r.json()
+        results['audio_duration_seconds']=job_result.get('duration')
+        results['gpu_pipeline_seconds']=job_result.get('pipeline_seconds')
+        if min_duration:
+            expect(float(job_result.get('duration') or 0)>=min_duration,'Incorrect uploaded audio duration')
+            expect(float(job_result.get('pipeline_seconds') or 10**6)<1800,'GPU pipeline exceeds 30 min')
+
         r=client.get(f'/api/jobs/{job}/rows')
         expect(r.status_code==200,'Completed transcript not readable')
         rows=r.json()['rows']
         expect(rows and all('start' in row and 'speaker' in row for row in rows),'Missing utterances')
         results['utterance_count']=len(rows)
+        results['last_utterance_end_seconds']=round(max(float(x['end']) for x in rows),3)
+        if min_duration:
+            expect(results['last_utterance_end_seconds']>=min_duration-60,'Last minute missing from final transcript')
         if diar:
             observed={row['speaker'] for row in rows if row['speaker'] not in ('話者未設定','話者不明')}
             expect(len(observed)==2, 'Diarization-on did not produce two speaker labels')
@@ -99,6 +112,8 @@ def main():
         expect(client.get(f'/api/jobs/{job}').status_code==404,'Deleted job still accessible')
         results['deleted']=True
     results['elapsed_seconds']=round(time.monotonic()-started,2)
+    if min_duration:
+        expect(results['elapsed_seconds'] < 1800,'End-to-end processing exceeds 30 minutes')
     Path('local_runs').mkdir(exist_ok=True)
     Path('local_runs/smoke_result.json').write_text(json.dumps(results,ensure_ascii=False,indent=2))
     print('ISOLATED_PRIVATE_BETA_E2E_PASS',json.dumps(results,sort_keys=True))
