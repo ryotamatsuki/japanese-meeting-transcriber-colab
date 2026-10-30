@@ -1,6 +1,6 @@
 """Safety checks for optional diarization stabilization. Not an acoustic accuracy benchmark."""
 import unittest
-from transcriber.quality import collapse_short_islands
+from transcriber.quality import collapse_short_islands, find_overlap_windows
 from transcriber.processor import Config
 
 
@@ -50,6 +50,21 @@ class QualityTests(unittest.TestCase):
             collapse_short_islands([seg(-1, 0, "A")])
         with self.assertRaises(ValueError):
             collapse_short_islands([], max_island_seconds=1)
+
+    def test_overlap_windows_are_not_artificial_speaker_relabels(self):
+        regular = [seg(0, 10, "A"), seg(1, 1.6, "B"),
+                   seg(3, 3.08, "B"), seg(5, 6, "B"), seg(6, 7, "B")]
+        windows = find_overlap_windows(regular)
+        self.assertEqual([(round(w["start"],2),round(w["end"],2)) for w in windows],
+                         [(1,1.6),(5,7)])
+        self.assertTrue(all(w["speaker_ids"] == ["A","B"] for w in windows))
+        self.assertEqual(len(regular), 5)
+
+    def test_overlap_requires_two_different_speakers(self):
+        self.assertEqual(find_overlap_windows([seg(0,2,"A"), seg(1,3,"A")]), [])
+        self.assertEqual(find_overlap_windows([]), [])
+        with self.assertRaises(ValueError):
+            find_overlap_windows([seg(-1, 2, "A")])
 
     def test_flag_is_opt_in(self):
         self.assertFalse(Config().quality_experiment)
