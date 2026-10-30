@@ -113,6 +113,11 @@ def main():
                                headers=headers,json={'reviewed':False})
                 expect(put.status_code==200,'Could not undo overlap review check')
                 results['overlap_review_mark_and_reopen']=True
+            eaf=os.environ.get('BETA_SMOKE_REF_EAF')
+            if eaf:
+                from scripts.evaluate_overlap_review import metrics
+                ground=metrics(Path(eaf),review)
+                results['overlap_ground_truth_metrics']=ground
         results['gpu_job_completed']=True
         r=client.get(f'/api/jobs/{job}/audio',headers={'Range':'bytes=0-1023'})
         expect(r.status_code in (200,206),'Audio playback fetch failed')
