@@ -98,7 +98,28 @@ def main():
         results['audio_access']=True
         rows[0]['text']='テスト用の修正済み発話。'
         r=client.put(f'/api/jobs/{job}/rows',headers=headers,json={'rows':rows})
-        expect(r.status_code==200,'Failed to save corrected text')
+        if r.status_code != 200:
+            # Store numeric diagnostics only, never source speech/transcripts.
+            import math
+            duration=float(job_result.get('duration') or 0)
+            invalid_time=sum(
+                not (0<=float(x['start'])<float(x['end'])<=duration+0.5)
+                for x in rows)
+            invalid_field=sum(
+                not isinstance(x.get('text'),str) or not isinstance(x.get('speaker'),str)
+                or len(str(x.get('text','')))>6000 or len(str(x.get('speaker','')))>80
+                for x in rows)
+            diagnostic={'status_code':r.status_code,'row_count':len(rows),
+                        'json_payload_bytes':len(json.dumps({'rows':rows},ensure_ascii=False).encode()),
+                        'invalid_timestamp_rows':invalid_time,
+                        'invalid_text_or_speaker_rows':invalid_field,
+                        'max_end_seconds':max(float(x['end']) for x in rows),
+                        'audio_duration_seconds':duration}
+            results['save_failure_diagnostics']=diagnostic
+            Path('local_runs').mkdir(exist_ok=True)
+            Path('local_runs/smoke_result.json').write_text(json.dumps(results,ensure_ascii=False,indent=2))
+            print('SANITIZED_LONG_FORM_SAVE_FAILURE',json.dumps(diagnostic,sort_keys=True),flush=True)
+        expect(r.status_code==200,'Failed to save corrected text (status='+str(r.status_code)+')')
         r=client.get(f'/api/jobs/{job}/download')
         expect(r.status_code==200,'Failed export')
         with ZipFile(io.BytesIO(r.content)) as z:
