@@ -70,7 +70,12 @@ def create_app(backend, *, password: str, session_secret: str):
 
     @app.get('/login',response_class=HTMLResponse)
     def login_page():
-        return HTMLResponse('''<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ログイン</title></head><body style="font-family:sans-serif;max-width:400px;margin:10vh auto;padding:2rem"><h1>会議文字起こし・限定ベータ</h1><p>許可された利用者のみ利用できます。</p><form method="post" action="/login"><label>アクセス用パスワード <input type="password" name="password" autocomplete="current-password" required style="display:block;width:100%;margin:.8rem 0;padding:.6rem"></label><button type="submit">ログイン</button></form></body></html>''')
+        return HTMLResponse((BASE/'login.html').read_text(encoding='utf-8'))
+
+    @app.get('/login.css')
+    def login_styles():
+        # Only the public, static login stylesheet; never serve protected app assets.
+        return FileResponse(BASE/'login.css',media_type='text/css')
 
     @app.post('/login')
     async def login(req:Request):

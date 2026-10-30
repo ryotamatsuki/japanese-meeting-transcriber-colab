@@ -8,6 +8,22 @@ from beta.backend import FileBackend
 from fastapi.testclient import TestClient
 
 class ReactUiTests(unittest.TestCase):
+    def test_login_is_self_hosted_and_csp_compatible(self):
+        with tempfile.TemporaryDirectory() as t:
+            app=server.create_app(FileBackend(t,{}),
+              password='password-longer-than-sixteen',
+              session_secret='secret-longer-than-thirty-two-characters-012345')
+            with TestClient(app,base_url='https://example.org') as client:
+                page=client.get('/login')
+                self.assertEqual(page.status_code,200)
+                self.assertIn('href="/login.css"',page.text)
+                self.assertIn('method="post"',page.text)
+                self.assertNotIn('<script',page.text)
+                styles=client.get('/login.css')
+                self.assertEqual(styles.status_code,200)
+                self.assertIn('text/css',styles.headers['content-type'])
+                self.assertIn("style-src 'self'",page.headers['content-security-policy'])
+
     def test_fallback_without_build(self):
         with tempfile.TemporaryDirectory() as t:
             b=FileBackend(t,{})
