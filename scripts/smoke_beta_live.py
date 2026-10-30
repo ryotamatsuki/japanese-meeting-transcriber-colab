@@ -24,7 +24,8 @@ def main():
     expect(url.startswith('https://') and url.endswith('.modal.run'),'Invalid isolated HTTPS URL')
     expect(path.is_file(),'Missing public test recording')
     started=time.monotonic()
-    results={}
+    diar=os.environ.get('BETA_SMOKE_DIARIZATION','0')=='1'
+    results={'diarization_enabled':diar}
     with httpx.Client(base_url=url,timeout=90.0,follow_redirects=False) as client:
         r=client.get('/api/jobs')
         expect(r.status_code==401,'Unauthenticated API must be denied')
@@ -41,9 +42,9 @@ def main():
         r=client.get('/')
         expect(r.status_code==200 and b'<html' in r.content,'Web HTML missing')
         results['static_assets_and_auth']=True
-        r=client.post('/api/jobs',json={'filename':path.name,'size':path.stat().st_size,'diarization':False,'speakers':2})
+        r=client.post('/api/jobs',json={'filename':path.name,'size':path.stat().st_size,'diarization':diar,'speakers':2})
         expect(r.status_code==403,'Missing CSRF was allowed')
-        r=client.post('/api/jobs',headers=headers,json={'filename':path.name,'size':path.stat().st_size,'diarization':False,'speakers':2})
+        r=client.post('/api/jobs',headers=headers,json={'filename':path.name,'size':path.stat().st_size,'diarization':diar,'speakers':2})
         expect(r.status_code==200,'Failed to create job: '+str(r.status_code))
         job=r.json()['id']
         content=path.read_bytes()
@@ -73,6 +74,10 @@ def main():
         rows=r.json()['rows']
         expect(rows and all('start' in row and 'speaker' in row for row in rows),'Missing utterances')
         results['utterance_count']=len(rows)
+        if diar:
+            observed={row['speaker'] for row in rows if row['speaker'] not in ('話者未設定','話者不明')}
+            expect(len(observed)==2, 'Diarization-on did not produce two speaker labels')
+            results['detected_speakers']=len(observed)
         results['gpu_job_completed']=True
         r=client.get(f'/api/jobs/{job}/audio',headers={'Range':'bytes=0-1023'})
         expect(r.status_code in (200,206),'Audio playback fetch failed')
