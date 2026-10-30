@@ -19,6 +19,7 @@ class Config:
     max_speakers: int = 0
     quality_experiment: bool = False
     speaker_cleanup_ms: int = 0
+    asr_beam_size: int = 5
 
     def __post_init__(self):
         counts = (self.expected_speakers, self.min_speakers, self.max_speakers)
@@ -26,6 +27,10 @@ class Config:
             raise ValueError('話者数は0以上の整数で指定してください。')
         if self.min_speakers and self.max_speakers and self.min_speakers > self.max_speakers:
             raise ValueError('MIN_SPEAKERSはMAX_SPEAKERS以下にしてください。')
+        if type(self.asr_beam_size) is not int or self.asr_beam_size not in (5, 8):
+            raise ValueError('asr_beam_size must be 5 (baseline) or 8 (experimental)')
+        if self.asr_beam_size != 5 and not self.quality_experiment:
+            raise ValueError('Nonbaseline ASR beam requires quality_experiment')
         if type(self.quality_experiment) is not bool:
             raise ValueError('quality_experiment must be boolean')
         if type(self.speaker_cleanup_ms) is not int or not 0 <= self.speaker_cleanup_ms <= 300:
