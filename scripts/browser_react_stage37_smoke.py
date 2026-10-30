@@ -77,7 +77,7 @@ def main():
             desktop.get_by_text("プロジェクト定例会議_サンプル.wav").first.wait_for()
             desktop.screenshot(path=str(OUT/"dashboard.png"),full_page=True)
             desktop.get_by_role("button",name="編集する").first.click()
-            desktop.get_by_role("heading",name="文字起こし").wait_for()
+            desktop.get_by_role("heading",name="文字起こし",exact=True).wait_for()
             assert desktop.locator("textarea").count()>0
             desktop.screenshot(path=str(OUT/"editor.png"),full_page=True)
             desktop.get_by_label("発言1のテキスト").fill("UIテストのための編集です。")
