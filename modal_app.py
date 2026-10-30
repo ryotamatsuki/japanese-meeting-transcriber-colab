@@ -124,6 +124,6 @@ def main(audio: str = '', output: str = 'local_runs', stage: str = 'full',
         for idx, archive in enumerate(result.pop('archives'), 1):
             (target / f'run-{idx}.zip').write_bytes(archive)
     result['client_wall_seconds'] = time.perf_counter() - started
-    result['timing_note'] = 'client wall includes build/queue/upload/download; not pure container startup time'
+    result['timing_note'] = 'measured inside local_entrypoint; excludes earlier CLI setup/image build, includes queue/upload/download; not pure container startup or billing time'
     (target / 'evidence.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
     print('Evidence saved; inspect ZIP and evidence.json locally. No transcript printed.')

@@ -99,7 +99,7 @@ JSONにはGPU名、CUDA、cuDNN、全主要バージョン、pip freeze、モデ
 
 GPUメモリはnvidia-smiによる200ms間隔の観測ピークです。CTranslate2も含みますが、サンプル間の瞬間最大値は捉えられません。
 `gpu_memory_sample_errors` が0か確認します。PyTorch allocatorだけの値で全体の最大使用量を主張しません。
-`client_wall_seconds` はビルド・キュー・転送を含み、コンテナ起動時間ではありません。
+`client_wall_seconds` はlocal_entrypoint内の計測で、キュー・転送等を含みます。CLI初期化・イメージビルドなどentrypoint開始前の時間は含まず、コンテナ起動時間・請求時間ではありません。
 純粋なコンテナ起動時間と請求対象時間はModal Dashboardのログ・メトリクスで別途確認してください。
 Whisper推論にはジェネレータの全消費、話者分離にはwav変換を含みます。
 音声長に対する速度は、初回の `audio_seconds / pipeline_seconds` などで比較します（初回ダウンロードの有無を注記）。

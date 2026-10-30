@@ -58,3 +58,14 @@ Test 2 App ap-PBLmIpjIwEOxnUT3r1FYfN; Function fu-uYLGsE4rBka7qXpeqN3BGH.
 Test 2: queued for GPU_L4 capacity as of 12:53:49 JST, not inference success.
 Licensed Japanese two-speaker source prepared, 34.579375 seconds.
 Test 3-6 remain pending. Secret form prepared, value empty and not submitted.
+
+HF Secret creation confirmed by name/key only; value not read.
+Run 40999313679 cancelled after prolonged ASR L4 scheduling wait.
+Its Test 1 step succeeded; artifact 12952759823 recovered and independently validated.
+NVIDIA L4; torch_cuda 12.8; cudnn 91002; CT2 CUDA devices 1.
+Dashboard Test 1 startup 4.40s; execution 14.11s; status Succeeded.
+Diagnostic instantaneous nvidia-smi memory 228MiB (not model peak).
+Run 41001086758: Test 2 PASS including Japanese/words/ZIP/evidence validation.
+Test 2 App ap-oku3npcbfnF7rNepLaImgS.
+Test 3 App ap-gTQ5or6dldrqH1M5qpl1Xx; waiting on GPU_L4 capacity.
+Timing note corrected: local_entrypoint clock excludes earlier setup/image build.

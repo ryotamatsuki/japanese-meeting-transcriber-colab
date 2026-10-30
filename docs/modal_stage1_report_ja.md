@@ -1,6 +1,6 @@
 # Japanese Meeting Transcriber — Stage 1 実装・検証報告
 
-検証日：2026-10-29〜30（日本時間）。**判定：Stage 1未完了。L4実診断はPASS。両モデルの実推論は未完了。**
+検証日：2026-10-29〜30（日本時間）。**判定：Stage 1未完了。L4実診断とlarge-v3実ASRはPASS。Community-1実推論は未完了。**
 
 > 最新状態は末尾「2026-10-30 Actions実検証」を参照。以下の2026-10-29時点の表は初回検証履歴。
 基準main：`84628cdc6f31e0a811d7bdbc0348347bf88fe7f7`。
@@ -297,3 +297,39 @@ CLI認証は既存Actions経由で成立しており、本人PCでのModal CLI�
 実行ログ：https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/40999313679
 Test 1：https://modal.com/apps/ryota-matsuki/main/ap-ixJoxZE95dtW7KuGmItKmy
 Test 2：https://modal.com/apps/ryota-matsuki/main/ap-PBLmIpjIwEOxnUT3r1FYfN
+
+
+### 2026-10-30 HF設定後の再開
+
+本人操作後、Modal Secret `transcriber-hf`の作成をUsage画面で確認した。
+値は読み取っていない。モデル利用権限の有効性は推論開始後のモデル取得で確認する。
+
+- 前runのASRは12:51:39にenqueueされ、13:03時点でも未開始・Pendingだった。
+  ModalとActionsから停止し、run全体はcancelled。Test 1 stepのsuccessは維持。
+  artifact `12952759823`を取得し、証拠validatorを再実行してPASS。
+- 新run `41001086758`はTest 2に成功。日本語の実認識、単語タイムスタンプ、
+  ZIP構造、GPU実行証拠を検査した。Test 2 Appは`ap-oku3npcbfnF7rNepLaImgS`。
+- 同runのTest 3専用Appは`ap-gTQ5or6dldrqH1M5qpl1Xx`、
+  Functionは`fu-rPToc1Hlm40cyYDxmyKY6Z`。
+  13:09:52、13:10:39、13:11:35（JST）のModalログにL4割当待ちを記録。
+  これはHF権限エラーではなく、モデルの取得・推論前の待機。
+- 各クライアント呼び出しに600秒上限を設け、上限超過時も証拠を保存する。
+
+Test 1の実証値：NVIDIA L4、torch CUDA 12.8、cuDNN 91002、
+CTranslate2 CUDA devices=1。実測ライブラリはtorch/torchaudio 2.9.1+cu128、
+TorchCodec 0.8.1、faster-whisper 1.2.1、CTranslate2 4.6.2、
+pyannote.audio 4.0.7、PyAV 18.1.0、soundfile 0.13.1。
+Modal Function Calls画面でStartup 4.40秒、Execution 14.11秒、Succeededを確認。
+診断時のnvidia-smiメモリは228 MiB（瞬間値でモデル推論ピークではない）。
+
+公式単価をStartup+Executionの18.51秒に適用した限定的概算は
+$0.0049229196。請求対象時間の確定値ではなく、ビルド・終了処理・ストレージ・
+無料枠を含めた請求額でもない。
+client_wall_secondsは20.440750744999974秒だが、local_entrypoint内の時計である。
+CLI初期化と事前イメージビルドを含まないため、計測注記を実装と手順で修正した。
+
+Test 1 artifact SHA256:
+`e1090fd7ab4e9f934673747b367d35101ec28ecc15ac3727b37c07f41680c82d`
+
+現行run：https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41001086758
+Test 1 artifact：https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/40999313679/artifacts/12952759823
