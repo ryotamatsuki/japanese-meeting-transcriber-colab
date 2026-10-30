@@ -60,6 +60,8 @@ def evaluate_archive(eaf_path: Path, archive_path: Path):
         pred_chars=''.join(s.get('text','') for s in asr['segments'])
         diar=json.loads(z.read('pyannote_話者区間.json'))['segments']
     asr_result=evaluate(ref_chars,pred_chars)
+    asr_result['reference_warning'] = ('Human-annotated IngCrowd ELAN dialogue, not Wikimedia subtitles. '
+                                        'Overlapping turns flattened in time order: this is rough text-order CER, not cpCER.')
     # DER/JER requires pyannote.metrics; keep its use localized to evaluation.
     from scripts.evaluate_diarization import compare
     diar_result=compare(turns,diar,collar=0.0)
