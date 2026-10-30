@@ -35,6 +35,11 @@ class QwenWebResearchContract(unittest.TestCase):
         self.assertEqual(speaker_labels(diar),
                          {'SPEAKER_A':'話者1','SPEAKER_B':'話者2'})
 
+    def test_gpu_research_failure_reason_is_allowlisted(self):
+        source=(ROOT/'beta_modal_qwen_research.py').read_text()
+        self.assertIn("job['failure_reason_code']=safe_codes.get(str(exc),'unclassified')",source)
+        self.assertNotIn("job['error']=str(exc)",source)
+
     def test_qwen_research_export_roundtrip(self):
         chunks=[
             {'offset_sec':0,'duration_sec':3,'text':'こんにちは。はい',

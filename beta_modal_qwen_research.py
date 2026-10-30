@@ -103,6 +103,22 @@ def transcribe_job(job_id: str, extension: str, diarization: bool, speakers: int
         job=jobs.get(key) or job
         job['failure_phase']=job.get('phase','unknown')
         job['failure_class']=type(exc).__name__
+        # Classify ONLY exact internal fixed messages; no original user
+        # content, filenames, token strings, or arbitrary exceptions.
+        safe_codes={
+            'Invalid audio or empty Qwen chunks':'invalid_chunks',
+            'Too many Qwen chunks':'too_many_chunks',
+            'Invalid chunk offsets / durations':'offset_validation',
+            'No alignment for nonempty Qwen transcript':'missing_alignment',
+            'Invalid/nonmonotonic Qwen aligned token':'token_timing',
+            'Qwen forced alignment did not preserve all normalized speech characters':'normalized_text_mismatch',
+            'Qwen produced empty speech for this evaluation':'empty_recognition',
+            'Qwen timestamps are missing or do not cover most of recording':'tail_coverage',
+            'Word attribution omitted aligned tokens':'lost_attribution_tokens',
+            'Speaker assignment changed or deleted normalized Qwen text':'attribution_text_mismatch',
+            'Forced-alignment times cannot be stabilized safely':'unsafe_alignment_order',
+        }
+        job['failure_reason_code']=safe_codes.get(str(exc),'unclassified')
         job['status']='failed'
         job['error']='Transcription failed; consult protected GPU logs'
         jobs[key]=job
