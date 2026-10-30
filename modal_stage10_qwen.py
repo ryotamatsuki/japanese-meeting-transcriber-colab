@@ -50,14 +50,23 @@ def evaluate_public_clip(raw_audio:bytes,human_reference:str,ref_sha:str,record_
             dtype=torch.bfloat16,device_map='cuda:0',
             attn_implementation='sdpa',
             max_inference_batch_size=1,
-            max_new_tokens=256)
+            max_new_tokens=512)
         load_seconds=time.perf_counter()-started
+        # qwen-asr 0.0.6 defaults to 1200s chunks, so an 11-minute
+        # recording with a fixed max_new_tokens silently truncates the
+        # transcript. Explicitly segment at low-energy boundaries first.
+        from qwen_asr.inference.utils import split_audio_into_chunks
+        chunks=split_audio_into_chunks(np.asarray(audio,dtype=np.float32),
+                                      sr=16000,max_chunk_sec=30.0)
+        if not chunks or len(chunks)>120:
+            raise ValueError('Invalid Qwen chunk count')
+        inputs=[(np.asarray(part,dtype=np.float32),16000) for part,_ in chunks]
         started=time.perf_counter()
-        outputs=model.transcribe(audio=(np.asarray(audio,dtype=np.float32),16000),
-                                 language='Japanese')
+        outputs=model.transcribe(audio=inputs,language=['Japanese']*len(inputs))
         inference_seconds=time.perf_counter()-started
-        if len(outputs)!=1:raise ValueError('Qwen ASR expected one result')
-        transcript=outputs[0].text
+        if len(outputs)!=len(inputs):
+            raise ValueError('Qwen ASR returned incomplete chunk batch')
+        transcript=''.join(x.text for x in outputs)
         score=evaluate(human_reference,transcript)
         weights.commit()
         return {'id':record_id,'eaf_sha256':ref_sha,'model':'Qwen/Qwen3-ASR-1.7B',
@@ -66,6 +75,7 @@ def evaluate_public_clip(raw_audio:bytes,human_reference:str,ref_sha:str,record_
                 'hypothesis_characters':score['hypothesis_characters'],
                 'load_seconds':load_seconds,'inference_seconds':inference_seconds,
                 'audio_seconds':len(audio)/16000,
+                'chunk_count':len(chunks),'chunk_max_seconds':30.0,
                 'license':'IngCrowd CC BY-NC 4.0 for noncommercial evaluation',
                 'note':'Flattened full-dialogue rough CER; not cpCER. No user audio.'}
 
