@@ -59,5 +59,6 @@ class BetaWebTests(unittest.TestCase):
         for _ in range(5):
             self.assertEqual(self.client.post('/login',data={'password':'bad'}).status_code,401)
         self.assertEqual(self.client.post('/login',data={'password':'bad'}).status_code,429)
+        self.assertEqual(self.client.get('/api/jobs').status_code,401)
 
 if __name__=='__main__': unittest.main()

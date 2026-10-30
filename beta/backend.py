@@ -113,6 +113,10 @@ class FileBackend:
         duration=self.probe(path)
         if not 1<=duration<=MAX_SECONDS:
             raise StoreError('Audio must be between one second and 60 minutes',400)
+        times=[t for t in self.state.get('gpu_job_times',[]) if time.time()-t<86400]
+        if len(times)>=4:
+            raise StoreError('Daily GPU limit reached (4 jobs per 24 hours)',429)
+        self.state['gpu_job_times']=times+[time.time()]
         job['status']='queued'
         job['duration']=duration
         self.state['job:'+id]=job

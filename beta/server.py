@@ -21,7 +21,6 @@ def create_app(backend, *, password: str, session_secret: str):
     app=FastAPI(title='Meeting Transcriber Private Beta', docs_url=None,
                 redoc_url=None,openapi_url=None)
     lock=asyncio.Lock()
-    attempts={}
 
     @app.middleware('http')
     async def headers(req, call_next):
@@ -76,7 +75,10 @@ def create_app(backend, *, password: str, session_secret: str):
     async def login(req:Request):
         import urllib.parse
         ip=req.client.host if req.client else 'unknown'
-        record=attempts.get(ip,{'count':0,'until':0})
+        key='login_attempts:'+ip
+        record=backend.state.get(key,{'count':0,'until':0})
+        if record['until']<time.time():
+            record={'count':0,'until':time.time()+900}
         if record['count']>=5 and time.time()<record['until']:
             raise HTTPException(429,'Too many login attempts')
         payload=await req.body()
@@ -85,9 +87,9 @@ def create_app(backend, *, password: str, session_secret: str):
         form=urllib.parse.parse_qs(payload.decode('utf-8','replace'))
         supplied=form.get('password',[''])[0]
         if not secrets.compare_digest(supplied,password):
-            attempts[ip]={'count':record['count']+1,'until':time.time()+900}
+            backend.state[key]={'count':record['count']+1,'until':record['until']}
             raise HTTPException(401,'Invalid password')
-        attempts.pop(ip,None)
+        backend.state.pop(key,None)
         tok=make_session(session_secret)
         response=RedirectResponse('/',status_code=303)
         response.set_cookie('beta_session',tok,max_age=12*3600,httponly=True,
@@ -118,7 +120,7 @@ def create_app(backend, *, password: str, session_secret: str):
     def session(req:Request):
         tok=require_auth(req)
         return {'csrf':csrf_for(session_secret,tok),'limits':{'file_bytes':MAX_AUDIO_BYTES,
-            'chunk_bytes':CHUNK_BYTES,'duration_seconds':3600,'saved_jobs':2},
+            'chunk_bytes':CHUNK_BYTES,'duration_seconds':3600,'saved_jobs':2,'gpu_jobs_24h':4},
             'beta_note':'Machine output; human verification required. Do not upload confidential audio.'}
 
     @app.get('/api/jobs')
