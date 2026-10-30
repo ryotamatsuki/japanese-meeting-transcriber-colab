@@ -12,6 +12,10 @@ def diarize(job, config, token, metrics):
     import soundfile as sf
     import torch
     DIAR_SETTINGS = {'model': 'pyannote/speaker-diarization-community-1', 'expected': int(EXPECTED_SPEAKERS), 'min': int(MIN_SPEAKERS) if not EXPECTED_SPEAKERS else 0, 'max': int(MAX_SPEAKERS) if not EXPECTED_SPEAKERS else 0}
+    if config.quality_experiment:
+        # Experiment parameters form part of the cache identity.
+        DIAR_SETTINGS["quality_experiment"] = True
+        DIAR_SETTINGS["speaker_cleanup_ms"] = config.speaker_cleanup_ms
     if ENABLE_DIARIZATION:
         if not token:
             raise RuntimeError('HF_TOKEN is required: configure Modal Secret transcriber-hf and accept Community-1 conditions.')
@@ -66,6 +70,26 @@ def diarize(job, config, token, metrics):
                     annotation = diar_output.exclusive_speaker_diarization
                     intervals = [{'start': float(turn.start), 'end': float(turn.end), 'speaker_id': str(speaker)} for turn, _, speaker in annotation.itertracks(yield_label=True)]
                     intervals.sort(key=lambda x: (x['start'], x['end']))
+                    if config.quality_experiment:
+                        standard = diar_output.speaker_diarization
+                        standard_intervals = [
+                            {"start": float(t.start), "end": float(t.end), "speaker_id": str(sp)}
+                            for t, _, sp in standard.itertracks(yield_label=True)
+                        ]
+                        standard_intervals.sort(key=lambda x: (x["start"], x["end"], x["speaker_id"]))
+                        (job["outdir"] / "pyannote_通常話者区間.json").write_text(
+                            json.dumps({"segments": standard_intervals, "settings": DIAR_SETTINGS},
+                                       ensure_ascii=False, indent=2), encoding="utf-8")
+                        (job["outdir"] / "pyannote_補正前話者区間.json").write_text(
+                            json.dumps({"segments": intervals, "settings": DIAR_SETTINGS},
+                                       ensure_ascii=False, indent=2), encoding="utf-8")
+                        metrics["standard_intervals"] = len(standard_intervals)
+                        metrics["exclusive_raw_intervals"] = len(intervals)
+                    if config.speaker_cleanup_ms:
+                        from .quality import collapse_short_islands
+                        intervals, audit = collapse_short_islands(
+                            intervals, max_island_seconds=config.speaker_cleanup_ms / 1000)
+                        metrics["speaker_cleanup_audit"] = audit
                     job['diar_segments'] = intervals
                     record = {'source_sha256': job['sha256'], 'settings': DIAR_SETTINGS, 'segments': intervals}
                     (job['outdir'] / 'pyannote_話者区間.json').write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
