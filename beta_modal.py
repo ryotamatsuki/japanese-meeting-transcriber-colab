@@ -111,24 +111,11 @@ def private_web():
               schedule=modal.Period(hours=1),timeout=240)
 def purge_expired_jobs():
     """Automatic 24h deletion. Protect active jobs until GPU function finishes."""
-    import shutil
-    import time
-    from beta.core import JOB_TTL_SECONDS, valid_job_id
-    root=Path('/data/jobs')
+    from beta.retention import purge_expired
     data.reload()
-    for folder in root.iterdir() if root.exists() else []:
-        if not folder.is_dir() or not valid_job_id(folder.name):
-            continue
-        state=jobs.get('job:'+folder.name)
-        if not state:
-            continue
-        if time.time()-state.get('created',time.time())<JOB_TTL_SECONDS:
-            continue
-        if state.get('status') in ('queued','running'):
-            continue
-        shutil.rmtree(folder,ignore_errors=True)
-        state['status']='deleted'
-        jobs['job:'+folder.name]=state
+    outcome=purge_expired('/data/jobs',jobs)
+    # Commit after verified physical removal. On a storage failure, the
+    # scheduled task fails visibly rather than claiming data was deleted.
     data.commit()
-    jobs['job_index']=[id for id in jobs.get('job_index',[])
-                       if (jobs.get('job:'+id) or {}).get('status')!='deleted']
+    # Aggregates only; never log filenames, contents or individual IDs.
+    print('Retention sweep:',outcome)
