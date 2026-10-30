@@ -98,7 +98,8 @@ def main(audio: str = '', output: str = 'local_runs', stage: str = 'full',
          no_diarization: bool = False, expected_speakers: int = 0,
          min_speakers: int = 0, max_speakers: int = 0, glossary: str = '',
          language: str = 'ja', repeat: int = 1, result_cache: bool = False,
-         quality_experiment: bool = False, speaker_cleanup_ms: int = 0):
+         quality_experiment: bool = False, speaker_cleanup_ms: int = 0,
+         asr_beam_size: int = 5):
     import json
     import time
     from dataclasses import asdict
@@ -110,7 +111,7 @@ def main(audio: str = '', output: str = 'local_runs', stage: str = 'full',
     config = Config(enable_diarization=not no_diarization, language=language, glossary=glossary,
                     expected_speakers=expected_speakers, min_speakers=min_speakers,
                     max_speakers=max_speakers, quality_experiment=quality_experiment,
-                    speaker_cleanup_ms=speaker_cleanup_ms)
+                    speaker_cleanup_ms=speaker_cleanup_ms, asr_beam_size=asr_beam_size)
     if stage == 'diarization' and no_diarization:
         raise ValueError('diarization stage requires diarization enabled')
     target = Path(output)
