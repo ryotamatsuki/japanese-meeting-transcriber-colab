@@ -161,3 +161,13 @@ modal deploy beta_modal.py
 - [10録音拡張のGPU Action 41061433932](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41061433932)を実行。**10録音すべての結果と人手正解ハッシュの照合が完了するまでは採用判定保留**。
 - 2録音Artifact `12978579578` SHA256 `0b0392fee89b29a4e57e15886191b4591b8718a8b415c3f8c78254e236195e31`。ChatGPT Libraryに保存。
 - [Stage10比較報告](v01_stage10_asr_model_results_20261030.md)。**main・現行ベータ既定`large-v3/beam5`は変更しない、公開No-Go**。
+
+## 2026-10-30 Stage 9・10 最終結果：Qwen3-ASR全10録音と採用保留
+
+- [Qwen3-ASR A10全10録音 Run 41061433932](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41061433932) **10/10処理成功**。元の[Whisper10録音 Run 41027370025](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41027370025)と人手ELAN参照SHA256・正規化参照文字数が全10件一致。
+- **時刻順連結CER（話者付きcpCERではない）の録音別中央値**：Whisper large-v3/beam5 **39.9073%** → Qwen3-ASR-1.7B（30秒分割）**31.4374%**。中央値の差 **−8.4699ポイント**。全10録音で改善。
+- **全録音の文字単位の合算CER**：Whisper **38.2309%** → Qwen **28.5594%**。正解参照合計43,954文字。CERの15%以下という暫定受入目標は依然未達。
+- 成功RunのArtifact `12981197926` SHA256 `317574fbe8a0d3bb9e7ec78462a27e70a527fa9c26a5a97116c5d66361c990e8`、数値のみ。元録音・人手正解文章は保存しない。
+- Qwenは**次の統合検証の優先候補**。ただしQwen出力の単語時刻・Community-1話者帰属・最終話者付きcpCER・60分Web E2E・費用・24時間自動削除・編集時間短縮は未検証。**ベータ既定をQwenに切替えず、リリース判定No-Goを維持**。
+- Stage9 SepFormer（英語WSJ向け）は短い重複発話2例で改善1件・変化なし1件。元の独立話者音声オラクルとは区別し、自動適用しない。
+- [Stage9・10の最終10録音検証と結論](v01_stage9_10_final_report_20261030.md)。
