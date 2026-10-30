@@ -73,8 +73,14 @@ def transcribe_job(job_id: str, extension: str, diarization: bool, speakers: int
                       language='ja',quality_experiment=False,overlap_review=diarization,asr_beam_size=5)
         # The input is read from shared storage, not passed as an oversized RPC argument.
         with tempfile.TemporaryDirectory(prefix='transcriber-beta-') as tmp:
+            def report_phase(phase):
+                state=jobs.get(key) or job
+                if state.get('status')=='running':
+                    state['phase']=phase
+                    jobs[key]=state
             archive,metrics=transcribe_qwen_research(audio,Path(tmp)/'results','/models/hf',config,
-                                     token=os.environ.get('HF_TOKEN') if diarization else None)
+                                     token=os.environ.get('HF_TOKEN') if diarization else None,
+                                     progress=report_phase)
             weights.commit()
             raw_archive=archive.read_bytes()
             parsed=parse_original_archive(raw_archive)
@@ -93,8 +99,10 @@ def transcribe_job(job_id: str, extension: str, diarization: bool, speakers: int
         job['utterances']=len(parsed['rows'])
         job['pipeline_seconds']=metrics.get('pipeline_seconds')
         jobs[key]=job
-    except Exception:
+    except Exception as exc:
         job=jobs.get(key) or job
+        job['failure_phase']=job.get('phase','unknown')
+        job['failure_class']=type(exc).__name__
         job['status']='failed'
         job['error']='Transcription failed; consult protected GPU logs'
         jobs[key]=job

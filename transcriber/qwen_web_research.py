@@ -15,7 +15,9 @@ from .files import safe_name, sha256_file
 from .exporters import export
 
 
-def transcribe_qwen_research(path, output_root, model_cache, config, token):
+def transcribe_qwen_research(path, output_root, model_cache, config, token, progress=None):
+    progress=progress or (lambda phase: None)
+    progress('starting')
     if not config.enable_diarization or not token:
         raise ValueError('Qwen research requires Community-1 and an HF token')
     import numpy as np
@@ -41,6 +43,7 @@ def transcribe_qwen_research(path, output_root, model_cache, config, token):
     metrics = {'stage':'research_qwen_web','model':'Qwen/Qwen3-ASR-1.7B'}
     began = time.perf_counter()
 
+    progress('decode')
     wav = outdir / 'temporary_qwen_mono16k.wav'
     subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-nostdin',
                     '-y','-i',str(audio),'-vn','-ac','1','-ar','16000',
@@ -57,6 +60,7 @@ def transcribe_qwen_research(path, output_root, model_cache, config, token):
     wav.unlink(missing_ok=True)
     if not 1 <= len(audio_chunks) <= 240:
         raise ValueError('Too many Qwen audio chunks')
+    progress('load_qwen')
     t=time.perf_counter()
     model=Qwen3ASRModel.from_pretrained(
         'Qwen/Qwen3-ASR-1.7B',dtype=torch.bfloat16,device_map='cuda:0',
@@ -66,6 +70,7 @@ def transcribe_qwen_research(path, output_root, model_cache, config, token):
                                'attn_implementation':'sdpa'})
     metrics['qwen_load_seconds']=time.perf_counter()-t
     t=time.perf_counter()
+    progress('infer_qwen')
     chunks=[]
     for waveform,offset in audio_chunks:
         one=model.transcribe(
@@ -80,6 +85,7 @@ def transcribe_qwen_research(path, output_root, model_cache, config, token):
         chunks.append({'offset_sec':float(offset),'duration_sec':len(waveform)/sr,
                        'text':one[0].text,'items':tokens})
     metrics['qwen_inference_seconds']=time.perf_counter()-t
+    progress('align_validate')
     job['asr_segments'],integrity=qwen_segments(chunks,duration)
     metrics['qwen_integrity']={k:v for k,v in integrity.items()
                                if k not in ('text',)}
@@ -94,12 +100,14 @@ def transcribe_qwen_research(path, output_root, model_cache, config, token):
     gc.collect()
     torch.cuda.empty_cache()
 
+    progress('diarization')
     diar_settings=diarize(job,config,token,metrics)
     # Refuse an empty diarization rather than returning anonymous transcripts.
     if not job.get('diar_segments'):
         raise ValueError('Community-1 produced no speaker boundaries')
     # Attribute original Qwen token order, applying only bounded repair
     # already covered by Stage12 lexical/order integrity guards.
+    progress('speaker_attribution')
     rows,quality=attribute_qwen(chunks,job['diar_segments'],duration)
     count=quality['aligned_tokens']
     speaker_map={seg['speaker_id']:f'話者{i+1}' for i,seg in enumerate(
@@ -109,6 +117,7 @@ def transcribe_qwen_research(path, output_root, model_cache, config, token):
     job['utterances'],job['speaker_map'],job['word_count']=rows,speaker_map,count
     metrics['estimated_speakers']=len(speaker_map)
     metrics['attributed_utterances']=len(rows)
+    progress('export')
     zip_path=export(job,out_root,config,
         {'model':'Qwen/Qwen3-ASR-1.7B',
          'aligner':'Qwen/Qwen3-ForcedAligner-0.6B',

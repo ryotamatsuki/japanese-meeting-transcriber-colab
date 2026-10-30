@@ -73,6 +73,11 @@ def main():
             time.sleep(4)
         else:
             raise AssertionError('GPU inference timed out in smoke')
+        if status=='failed' and os.environ.get('BETA_SMOKE_DIAGNOSE_PHASE')=='1':
+            detail=r.json()
+            print('SANITIZED_GPU_FAILURE',json.dumps({'status':'failed',
+                'phase':detail.get('failure_phase'),
+                'exception_class':detail.get('failure_class')},sort_keys=True),flush=True)
         expect(status=='complete','GPU job did not complete (status='+status+')')
         job_result=r.json()
         results['audio_duration_seconds']=job_result.get('duration')
