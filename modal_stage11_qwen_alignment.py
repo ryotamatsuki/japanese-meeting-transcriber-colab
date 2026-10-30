@@ -48,7 +48,8 @@ def qwen_timed_tokens(audio_bytes:bytes, chunk_seconds:int=30):
         duration=float(len(audio)/sr)
         chunks=split_audio_into_chunks(np.asarray(audio,dtype=np.float32),
                                        sr=16000,max_chunk_sec=float(chunk_seconds))
-        if not 1<=len(chunks)<=40:
+        if not 1<=len(chunks)<=80:
+            # 15-second research fallback needs up to 60 chunks at 15min.
             raise ValueError('Invalid chunk count')
         start=time.perf_counter()
         model=Qwen3ASRModel.from_pretrained(
