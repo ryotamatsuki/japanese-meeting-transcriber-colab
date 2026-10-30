@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "qwen_research_full10": {
+    "run_id": 41076994471,
+    "completed": 10,
+    "failed": 0,
+    "reference_hashes_match": true,
+    "research_extension_gate": "PASS"
+  },
+  "qwen_web": {
+    "short_run_id": 41079582347,
+    "short_web_e2e_success": true,
+    "short_explicit_deletion_verified": true,
+    "longform": {
+      "independent_recordings": 0,
+      "human_check_final_minute": false,
+      "edit_export_delete_verified": false,
+      "fresh_runs_pass": false
+    }
+  },
+  "quality": {
+    "human_reference_cer_median_percent": null,
+    "independent_natural_meetings": false,
+    "human_reference_der_median_percent": null,
+    "diarization_scored_on_final_mode": false,
+    "human_annotated_three_speaker": 0,
+    "human_annotated_four_speaker": 0,
+    "licenses_confirmed": false,
+    "references_are_human_verified": false
+  },
+  "security_and_retention": {
+    "auth_csrf_pass": true,
+    "physical_delete_verified": true,
+    "stale_recovery_verified": false,
+    "scheduled_cleanup_verified": false,
+    "latest_ci_green": true
+  },
+  "billing": {
+    "actual_billing_checked": true,
+    "workspace_budget_hard_limit_configured": false,
+    "charge_notifications_configured": false
+  },
+  "human_editing": {
+    "paired_distinct_recordings": 0,
+    "median_saving_percent": null,
+    "independent_quality_pass": false,
+    "human_timed_crossover": false
+  },
+  "restricted_nonconfidential_beta_only": true,
+  "legal_review_for_audio_upload": false,
+  "human_transcript_verification_required": true
+}
