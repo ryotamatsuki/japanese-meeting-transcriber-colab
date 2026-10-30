@@ -65,6 +65,17 @@ def process(path, output_root, model_cache, config=None, token=None, stage='full
         merge_started = time.perf_counter()
         job['utterances'], job['speaker_map'], job['word_count'] = assign_and_group(
             job['asr_segments'], job['diar_segments'], config.enable_diarization)
+        if config.quality_experiment and config.enable_diarization:
+            from .attribution_review import audit_word_speaker_assignments
+            standard_path = outdir / "pyannote_通常話者区間.json"
+            standard = (json.loads(standard_path.read_text(encoding="utf-8"))["segments"]
+                        if standard_path.exists() else [])
+            audit = audit_word_speaker_assignments(job["asr_segments"], job["diar_segments"],
+                                                   standard)
+            (outdir / "話者割当て要確認.json").write_text(
+                json.dumps(audit, ensure_ascii=False, indent=2), encoding="utf-8")
+            metrics["word_attribution_review_words"] = audit["review_words"]
+            metrics["word_attribution_total_words"] = audit["word_count"]
         zip_path = export(job, output_root, config, asr_settings, diar_settings)
         metrics['alignment_export_seconds'] = time.perf_counter() - merge_started
         metrics['estimated_speakers'] = len(job['speaker_map'])
