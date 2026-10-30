@@ -56,6 +56,7 @@ def qwen_segments(chunks: list[dict], duration: float) -> tuple[list[dict],dict]
     result=[]
     words_count=0
     lexical_redistribution_chunks=0
+    tail_timestamp_review_tokens=0
     lexical_input=[]
     lexical_alignment=[]
     maximum=0.
@@ -88,7 +89,22 @@ def qwen_segments(chunks: list[dict], duration: float) -> tuple[list[dict],dict]
             last_start=a
             absolute_a=round(max(0.0,offset+a),3)
             absolute_b=round(min(duration,offset+max(a+0.01,b)),3)
-            if absolute_b <= absolute_a: continue
+            if absolute_b <= absolute_a:
+                # The aligner may place a few final-token onsets up to 0.8s
+                # beyond the actual file end. Never *drop* their transcript
+                # text: retain it in a 1ms end-of-file REVIEW interval.
+                # This is an inferred placeholder, NOT a measured onset.
+                # Fail closed for offsets outside the documented tolerance
+                # or more than four such tokens.
+                overrun=(offset+a)-duration
+                if not (0 <= overrun <= 0.8 and
+                        tail_timestamp_review_tokens < 4 and
+                        offset+chunk_duration >= duration-0.8 and
+                        round(duration,3) >= 0.002):
+                    raise ValueError("Forced alignment offset exceeded bounded audio tail")
+                absolute_b=round(duration,3)
+                absolute_a=round(absolute_b-0.001,3)
+                tail_timestamp_review_tokens+=1
             sub.append({'text':token,'start':absolute_a,'end':absolute_b})
             lexical_alignment.append(token)
             words_count+=1
@@ -121,7 +137,8 @@ def qwen_segments(chunks: list[dict], duration: float) -> tuple[list[dict],dict]
         'normalized_text_characters':len(joined),
         'text_preserved':True,'final_word_end_seconds':maximum,
         'chunk_count':len(chunks),
-        'lexical_redistribution_chunks':lexical_redistribution_chunks}
+        'lexical_redistribution_chunks':lexical_redistribution_chunks,
+        'tail_timestamp_review_tokens':tail_timestamp_review_tokens}
 
 
 def attribute_qwen(chunks: list[dict], diarization: list[dict], duration: float):

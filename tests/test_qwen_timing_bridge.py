@@ -85,6 +85,25 @@ class QwenTimingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             qwen_segments(data,6)
 
+    def test_clamped_final_token_preserves_content_and_marks_review(self):
+        data=sample()
+        data[1]['items'][1]['start_time']=3.2
+        data[1]['items'][1]['end_time']=3.4
+        rows,meta=attribute_qwen(data,[{'start':0,'end':3,'speaker_id':'A'},
+                                        {'start':3,'end':6,'speaker_id':'B'}],6)
+        self.assertEqual(meta['tail_timestamp_review_tokens'],1)
+        self.assertTrue(meta['all_normalized_text_preserved'])
+        self.assertEqual(''.join(x['text'] for x in rows),
+                         'こんにちははいありがとうございます')
+        self.assertEqual(rows[-1]['end'],6.0)
+
+    def test_excessive_tail_offset_must_fail_not_drop_text(self):
+        data=sample()
+        data[1]['items'][1]['start_time']=3.9
+        data[1]['items'][1]['end_time']=3.95
+        with self.assertRaises(ValueError):
+            qwen_segments(data,6)
+
     def test_rejects_unknown_speaker_model(self):
         with self.assertRaises(ValueError):
             attribute_qwen(sample(),[],6)
