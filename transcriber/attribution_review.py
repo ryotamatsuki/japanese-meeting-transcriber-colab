@@ -7,6 +7,8 @@ speaker attribution. Standard diarization may contain simultaneous speakers.
 from __future__ import annotations
 
 from collections import Counter
+from bisect import bisect_right
+from .quality import find_overlap_windows
 import math
 
 
@@ -29,6 +31,10 @@ def audit_word_speaker_assignments(asr_segments, exclusive, standard=None,
     if not 0 <= margin <= 0.5 or not 0 <= minimum_coverage <= 1 or not 0 <= overlap_seconds <= 1:
         raise ValueError("Invalid review thresholds")
     standard = standard or []
+    exclusive = sorted(exclusive, key=lambda x: (x['start'], x['end']))
+    end_times = [float(s['end']) for s in exclusive]
+    overlap_windows = find_overlap_windows(standard, minimum_seconds=0)
+    overlap_ends = [float(w['end']) for w in overlap_windows]
     rows = []
     counts = Counter()
     for seg in asr_segments:
@@ -45,10 +51,13 @@ def audit_word_speaker_assignments(asr_segments, exclusive, standard=None,
             length = end - start
             scores = {}
             if length:
-                for s in exclusive:
-                    overlap = _intersection(start, end, float(s["start"]), float(s["end"]))
+                cursor = bisect_right(end_times, start)
+                for s in exclusive[cursor:]:
+                    if float(s['start']) >= end:
+                        break
+                    overlap = _intersection(start, end, float(s['start']), float(s['end']))
                     if overlap > 0:
-                        name = str(s["speaker_id"])
+                        name = str(s['speaker_id'])
                         scores[name] = scores.get(name, 0.0) + overlap
             ordered = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
             winner = ordered[0][0] if ordered else None
@@ -66,23 +75,14 @@ def audit_word_speaker_assignments(asr_segments, exclusive, standard=None,
                 flags.append("word_crosses_speaker_boundary")
                 if ratio is not None and ratio - (1 - ratio) <= margin:
                     flags.append("close_speaker_overlap_scores")
-            # Sweep-line is unnecessary per short word; union of concurrent
-            # speakers is not enough, require actual *simultaneous* time overlap.
-            overlapping = []
-            for i, left in enumerate(standard):
-                left_start = max(start, float(left["start"]))
-                left_end = min(end, float(left["end"]))
-                if left_start >= left_end:
-                    continue
-                for right in standard[i + 1:]:
-                    if left["speaker_id"] == right["speaker_id"]:
-                        continue
-                    both = _intersection(left_start, left_end,
-                                         float(right["start"]), float(right["end"]))
-                    if both >= overlap_seconds:
-                        overlapping.append((str(left["speaker_id"]), str(right["speaker_id"])))
-            if overlapping:
-                flags.append("regular_diarization_overlap_candidate")
+            # Precomputed overlap windows avoid quadratic pairwise comparison.
+            overlap_cursor = bisect_right(overlap_ends, start)
+            for window in overlap_windows[overlap_cursor:]:
+                if window['start'] >= end:
+                    break
+                if _intersection(start, end, window['start'], window['end']) >= overlap_seconds:
+                    flags.append('regular_diarization_overlap_candidate')
+                    break
             for flag in flags:
                 counts[flag] += 1
             rows.append({
