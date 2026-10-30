@@ -134,3 +134,12 @@ modal deploy beta_modal.py
 - 165発言、HTTP E2E 129.81秒、GPU処理82.277秒。認証・CSRF・確認済み保存/解除・字幕修正・ZIP出力・明示削除・専用Modal環境削除すべてPASS。
 - ブラウザUI操作は合成WAVのローカルChromiumでPASS。Modal実音声の検証はブラウザと同じHTTP API経路であり、音声プレイヤーの長時間手動操作を含む本番UI試験ではない。
 - **v0.1全体の判定は引き続きNo-Go**。現行アプリの日本語CER、最終話者帰属、2〜4人の一般会議精度、再現性・費用・削除・作業時間短縮に未達の項目がある。
+
+## Stage 8 最終話者付き文字起こし評価（2026-10-30）
+
+- [全10録音A10 Full Pipeline評価 Run 41054900339](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41054900339)：10/10正常処理、人手ELAN参照ハッシュ一致。**cpCER中央値46.8949%、全件合算43.3521%**、正解43,954字に対し推定30,294字（68.92%）。**品質上のリリース基準未達**。
+- 従来の単純全文CER中央値39.907%との差は、話者誤割当ての寄与そのものではない。評価の定義・重複発話の順序が異なるため、数値は別々に提示する。
+- **重複区間と非重複区間の発言単位文字誤り率は、発言が両区間を跨ぐため有効な指標ではないと判定。** 研究コードから不適切なスコアを撤回し、時間区間の候補数や参照重複時間のみ報告する。
+- [同一ASR固定・3録音のRegular単語話者割当てアブレーション Run 41055452343](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41055452343)：3/3正常処理。**Regularは1件改善、2件悪化、ペア差中央値+0.711pp（cpCER増加）**。Stage6でDER/JERが改善したからといって最終発言帰属の変更を採用しない。
+- 生音声と転写文は保存せず、数値メトリクスのみ。Artifact `12976708710` SHA256 `7f9565b824af6173f6c9200cc9d286a33da8775e7e3b938396f5ac58452fec68`、`12977955960` SHA256 `995a2cc49012a98d9bc062993f1a02054d9dfa649c178b586f64f2ab58c9e9aa`。
+- 詳細：[Stage 8 誤差・採否分析](v01_stage8_attributed_transcript_results_20261030.md)。**Release No-Go維持**。現行ASRとExclusive話者帰属のデフォルト、重複要確認UIは現状のまま。
