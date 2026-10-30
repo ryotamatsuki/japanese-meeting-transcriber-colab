@@ -3,7 +3,7 @@ import time
 
 def transcribe(job, config, model_cache, metrics):
     jobs = [job]
-    WHISPER_MODEL, LANGUAGE, GLOSSARY = "large-v3", config.language, config.glossary
+    WHISPER_MODEL, LANGUAGE, GLOSSARY = config.asr_model, config.language, config.glossary
     import json, gc
     import torch, av
     from faster_whisper import WhisperModel
