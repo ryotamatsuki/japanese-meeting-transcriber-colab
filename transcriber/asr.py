@@ -11,7 +11,7 @@ def transcribe(job, config, model_cache, metrics):
     if not torch.cuda.is_available():
         raise RuntimeError('CUDA GPU is required; CPU fallback is disabled.')
     COMPUTE = 'float16'
-    ASR_SETTINGS = {'model': WHISPER_MODEL, 'language': LANGUAGE, 'glossary': GLOSSARY.strip(), 'beam_size': 5, 'vad_filter': True, 'min_silence_duration_ms': 550, 'word_timestamps': True, 'condition_on_previous_text': False}
+    ASR_SETTINGS = {'model': WHISPER_MODEL, 'language': LANGUAGE, 'glossary': GLOSSARY.strip(), 'beam_size': config.asr_beam_size, 'vad_filter': True, 'min_silence_duration_ms': 550, 'word_timestamps': True, 'condition_on_previous_text': False}
     pending = []
     for job in jobs:
         dest = job['outdir'] / 'whisper_asr.json'
@@ -32,7 +32,7 @@ def transcribe(job, config, model_cache, metrics):
         metrics["asr_model_load_seconds"] = time.perf_counter() - load_started
         infer_started = time.perf_counter()
         for number, job in enumerate(pending, 1):
-            segments, info = model.transcribe(str(job['path']), language=None if LANGUAGE == 'auto' else LANGUAGE, task='transcribe', beam_size=5, vad_filter=True, vad_parameters={'min_silence_duration_ms': 550}, initial_prompt=GLOSSARY.strip() or None, condition_on_previous_text=False, word_timestamps=True)
+            segments, info = model.transcribe(str(job['path']), language=None if LANGUAGE == 'auto' else LANGUAGE, task='transcribe', beam_size=config.asr_beam_size, vad_filter=True, vad_parameters={'min_silence_duration_ms': 550}, initial_prompt=GLOSSARY.strip() or None, condition_on_previous_text=False, word_timestamps=True)
             metrics["audio_seconds"] = float(info.duration)
             rows = []
             partial = job['outdir'] / 'whisper_asr_partial.json'
