@@ -125,3 +125,12 @@ modal deploy beta_modal.py
 - **話者区間（Diarization）の2話者暫定ゲートDER中央値30%以下はRegularで達成**。ただし既定アプリはExclusiveであり、最終文字起こしの話者ID/重複発言の抽出/CERは改善を実証していない。**v0.1全体は引き続きNo-Go**。
 - 技術的推奨：`speaker_diarization`を重複話者候補の確認表示用として保持し、`exclusive_speaker_diarization`を現行の単語→単一話者割当て用に維持。重複部分のASR再推論や人手訂正UIを別実験してから機能統合する。
 - 詳細：[docs/v01_stage6_community1_overlap_comparison_20261030.md](v01_stage6_community1_overlap_comparison_20261030.md)。
+
+## 2026-10-30 Stage 7 — 重複発話「要確認」機能の実装・実環境合格
+
+- [Stage 7 証拠・設計資料](v01_stage7_overlap_review_20261030.md)、[実GPU・Web E2E Run 41053310600](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41053310600)、[Chromium操作QA Run 41053529713](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41053529713)。すべて成功。
+- 同一Community-1から重複推定区間を抽出し、Webで音声再生・発話行ジャンプ・確認済みを永続化。通常のASRと排他的な単一話者帰属は既定維持。
+- 非商用研究用IngCrowd対話01（11分15.864秒・2人）：候補82区間。人手ELAN重複区間を参照した時間適合率**89.7353%**、再現率**47.7919%**。**見逃しを含むため重複なし保証には利用できない**。
+- 165発言、HTTP E2E 129.81秒、GPU処理82.277秒。認証・CSRF・確認済み保存/解除・字幕修正・ZIP出力・明示削除・専用Modal環境削除すべてPASS。
+- ブラウザUI操作は合成WAVのローカルChromiumでPASS。Modal実音声の検証はブラウザと同じHTTP API経路であり、音声プレイヤーの長時間手動操作を含む本番UI試験ではない。
+- **v0.1全体の判定は引き続きNo-Go**。現行アプリの日本語CER、最終話者帰属、2〜4人の一般会議精度、再現性・費用・削除・作業時間短縮に未達の項目がある。
