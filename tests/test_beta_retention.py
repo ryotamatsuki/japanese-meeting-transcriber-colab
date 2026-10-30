@@ -51,6 +51,32 @@ class RetentionTests(unittest.TestCase):
             self.assertEqual(r['orphan_removed'],1)
             self.assertFalse(orphan.exists())
 
+    def test_stale_running_and_queued_are_reclaimed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            now=2000000000.
+            stale_running='7'*32
+            stale_queued='8'*32
+            active_running='9'*32
+            state={'job_index':[stale_running,stale_queued,active_running]}
+            for jid,status,age,started in [
+                (stale_running,'running',JOB_TTL_SECONDS+8000,now-8000),
+                (stale_queued,'queued',JOB_TTL_SECONDS+8000,None),
+                (active_running,'running',JOB_TTL_SECONDS+8000,now-300),
+            ]:
+                folder=Path(temp)/jid;folder.mkdir()
+                (folder/'source.mp3').write_bytes(b'x')
+                row={'created':now-age,'status':status}
+                if started is not None:
+                    row['started_at']=started
+                state['job:'+jid]=row
+            outcome=purge_expired(temp,state,now=now)
+            self.assertEqual(outcome['stale_active_reclaimed'],2)
+            self.assertEqual(outcome['expired_removed'],2)
+            self.assertTrue((Path(temp)/active_running).exists())
+            self.assertFalse((Path(temp)/stale_running).exists())
+            self.assertFalse((Path(temp)/stale_queued).exists())
+            self.assertEqual(state['job:'+active_running]['status'],'running')
+
     def test_failed_disk_delete_does_not_claim_deleted(self):
         with tempfile.TemporaryDirectory() as temp:
             now=2000000000.

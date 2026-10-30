@@ -50,7 +50,15 @@ def transcribe_job(job_id: str, extension: str, diarization: bool, speakers: int
     job=jobs.get(key)
     if not job or job['status']!='queued' or job['extension']!=extension:
         raise ValueError('Invalid or canceled work item')
+    import time
+    from beta.core import JOB_TTL_SECONDS
+    if time.time()-float(job['created'])>=JOB_TTL_SECONDS:
+        job['status']='failed'
+        job['error']='Job expired before GPU started'
+        jobs[key]=job
+        return
     job['status']='running'
+    job['started_at']=time.time()
     jobs[key]=job
     try:
         data.reload()

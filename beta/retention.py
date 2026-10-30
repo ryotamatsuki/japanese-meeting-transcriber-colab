@@ -14,7 +14,7 @@ from .core import JOB_TTL_SECONDS,valid_job_id
 def purge_expired(root, job_state, *, now=None):
     now=time.time() if now is None else float(now)
     root=Path(root)
-    result={'expired_removed':0,'orphan_removed':0,'active_expired_skipped':0}
+    result={'expired_removed':0,'orphan_removed':0,'active_expired_skipped':0,'stale_active_reclaimed':0}
     for folder in root.iterdir() if root.is_dir() else []:
         if not folder.is_dir() or not valid_job_id(folder.name):
             continue
@@ -29,9 +29,26 @@ def purge_expired(root, job_state, *, now=None):
             continue
         if now-float(record.get('created',now))<JOB_TTL_SECONDS:
             continue
-        if record.get('status') in ('queued','running'):
-            result['active_expired_skipped']+=1
-            continue
+        status=record.get('status')
+        if status in ('queued','running'):
+            # A GPU execution cannot outlive its enforced 3600s timeout.
+            # Still, avoid deleting a legitimate function that only recently
+            # started after waiting in the provider queue.
+            started=record.get('started_at')
+            try:
+                started=float(started) if started is not None else None
+            except (TypeError,ValueError):
+                started=None
+            if status=='running' and started is not None and 0<=now-started<=4200:
+                result['active_expired_skipped']+=1
+                continue
+            if (started is None and
+                    now-float(record.get('created',now))<=JOB_TTL_SECONDS+7200):
+                result['active_expired_skipped']+=1
+                continue
+            # Terminal stale queued/running record. The source file is past
+            # retention; any late GPU start must reject status != queued.
+            result['stale_active_reclaimed']+=1
         # Raise if deletion failed instead of writing a false deleted state.
         shutil.rmtree(folder)
         record=dict(record)
