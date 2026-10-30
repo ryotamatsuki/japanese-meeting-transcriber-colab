@@ -45,6 +45,12 @@ def export(job, root, config, asr_settings, diar_settings):
     outputs = [txt, csv_path, srt, mapping, outdir / 'whisper_asr.json', report_path]
     if ENABLE_DIARIZATION:
         outputs.extend([outdir / 'pyannote_話者区間.csv', outdir / 'pyannote_話者区間.json'])
+        # Experimental diagnostic files: never present in baseline output ZIPs.
+        if config.quality_experiment:
+            for name in ('pyannote_通常話者区間.json', 'pyannote_補正前話者区間.json'):
+                p = outdir / name
+                if p.exists():
+                    outputs.append(p)
     zip_path = ROOT / f'{prefix}_文字起こし結果.zip'
     with ZipFile(zip_path, 'w', ZIP_DEFLATED, compresslevel=6) as z:
         for p in outputs:
