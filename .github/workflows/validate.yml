@@ -21,5 +21,7 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Verify Modal SDK decorators and deployment module import
         run: python -c 'import beta_modal; assert beta_modal.app is not None'
+      - name: Verify beta browser JavaScript syntax
+        run: node --check beta/site.js
       - name: Verify Python syntax
         run: python -m compileall -q beta beta_modal.py transcriber
