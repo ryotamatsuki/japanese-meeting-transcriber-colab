@@ -53,6 +53,15 @@ class AttributionReviewTests(unittest.TestCase):
         self.assertEqual(record["review_words"],0)
         self.assertEqual(record["word_count"],1000)
 
+    def test_baseline_and_quality_beam_validation(self):
+        from transcriber.processor import Config
+        self.assertEqual(Config().asr_beam_size,5)
+        self.assertEqual(Config(quality_experiment=True, asr_beam_size=8).asr_beam_size,8)
+        with self.assertRaises(ValueError):
+            Config(asr_beam_size=8)
+        with self.assertRaises(ValueError):
+            Config(quality_experiment=True,asr_beam_size=12)
+
     def test_reject_invalid_word(self):
         with self.assertRaises(ValueError):
             audit_word_speaker_assignments(seg((-1,0,"悪い")),[])
