@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 
 import uvicorn
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 from beta.backend import FileBackend
 from beta.server import create_app
@@ -80,7 +80,7 @@ def main():
                 assert '要確認 2区間 / 確認済み 0区間' in page.locator('#overlapSummary').inner_text()
                 check=review.locator('input[type=checkbox]').first
                 check.check()
-                page.wait_for_function("document.querySelector('#overlapSummary').innerText.includes('確認済み 1区間')")
+                expect(page.locator('#overlapSummary')).to_contain_text('確認済み 1区間')
                 assert check.is_checked()
                 page.reload()
                 page.get_by_role('button',name='編集する').click()
@@ -88,13 +88,13 @@ def main():
                 check=page.locator('#overlapReview input[type=checkbox]').first
                 assert check.is_checked(),'Review checked state did not survive browser reload'
                 page.locator('.overlap-candidate').first.get_by_role('button',name='発言行へ').click()
-                page.wait_for_function("document.activeElement?.getAttribute('aria-label')==='発話テキスト'")
+                expect(page.locator('.utterance textarea').first).to_be_focused()
                 field=page.locator('.utterance textarea').first
                 field.fill('ブラウザで修正しました。')
                 page.get_by_role('button',name='修正を保存').click()
-                page.wait_for_function("document.querySelector('#editstatus').innerText.includes('保存しました')")
+                expect(page.locator('#editstatus')).to_contain_text('保存しました')
                 check.uncheck()
-                page.wait_for_function("document.querySelector('#overlapSummary').innerText.includes('確認済み 0区間')")
+                expect(page.locator('#overlapSummary')).to_contain_text('確認済み 0区間')
                 page.reload()
                 page.get_by_role('button',name='編集する').click()
                 page.locator('#overlapReview').wait_for(state='visible')
