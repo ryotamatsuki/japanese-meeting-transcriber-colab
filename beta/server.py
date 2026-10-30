@@ -13,6 +13,7 @@ from .backend import StoreError
 from .core import make_session, verify_session, csrf_for, CHUNK_BYTES, MAX_AUDIO_BYTES
 
 BASE = Path(__file__).parent
+REACT_DIST = BASE / 'react_dist'
 
 
 def create_app(backend, *, password: str, session_secret: str):
@@ -107,7 +108,27 @@ def create_app(backend, *, password: str, session_secret: str):
     def home(req:Request):
         if not verify_session(session_secret,req.cookies.get('beta_session','')):
             return RedirectResponse('/login',status_code=303)
-        return HTMLResponse((BASE/'site.html').read_text(encoding='utf-8'))
+        ui = REACT_DIST/'index.html'
+        if not ui.is_file():
+            ui = BASE/'site.html'  # Legacy UI retained until a production React build exists.
+        return HTMLResponse(ui.read_text(encoding='utf-8'))
+
+    @app.get('/ui/{asset_path:path}')
+    def react_assets(req:Request,asset_path:str):
+        # Production Vite bundle: authenticated, same-origin and CSP-compatible.
+        # Do not allow an arbitrary file server or an unauthenticated static mount.
+        require_auth(req)
+        if not asset_path.startswith('assets/'):
+            raise HTTPException(404,'Not found')
+        suffix=Path(asset_path).suffix.lower()
+        if suffix not in ('.js','.css','.svg','.png','.ico','.woff2'):
+            raise HTTPException(404,'Not found')
+        root=REACT_DIST.resolve()
+        path=(root/asset_path).resolve()
+        if root not in path.parents or not path.is_file():
+            raise HTTPException(404,'Not found')
+        import mimetypes
+        return FileResponse(path,media_type=mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
 
     @app.get('/assets/{name}')
     def assets(req:Request,name:str):
