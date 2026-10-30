@@ -114,3 +114,14 @@ modal deploy beta_modal.py
 - 参照メトリクスを引用した独立レポート：`docs/v01_stage5_error_analysis_20261030.md`。
 - **再試験で60分Web経由E2E成功**：[Run 41028143023](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41028143023) 3593.448秒入力→509.92秒で完了、1097行編集保存・ZIP・削除までPASS。しかし初回Run 41026648129の保存失敗の根本原因は不明であり、ランダムな失敗に対する安定性は未認定。
 
+
+## 2026-10-30 Stage 6：Community-1の通常（重複保持）対排他的出力の同一実験比較
+
+- [GitHub Actions A10 41046765301](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41046765301) **10/10成功**。参照EAF SHA256は前回の10件と全件一致。
+- Whisperとは独立した話者区間評価。全条件固定：IngCrowd 2話者10対話、Community-1、A10、num_speakers=2、collar=0秒、skip_overlap=False、48kbps MP3入力。
+- **録音別DER中央値**：Exclusive 32.124% → Regular **25.548%**。**録音別JER中央値**：34.214% → **27.359%**。10録音すべて双方改善。
+- **全録音合算DER**：28.521% → **22.219%**。Miss 1988.717秒→1392.380秒（約596.337秒改善）、Confusion 276.961秒→243.366秒（約33.596秒改善）、**False alarm 90.744秒→200.018秒（約109.274秒悪化）**。メリット・デメリットを併記する。
+- 元Artifact `12972029827` / SHA256 `dd881612dc553d4ccc72dd3f2ebb6adb8164a32506b9d3b20b7e93ad2bfc9a66`。有効期限2026-11-06 20:22:36 JST。
+- **話者区間（Diarization）の2話者暫定ゲートDER中央値30%以下はRegularで達成**。ただし既定アプリはExclusiveであり、最終文字起こしの話者ID/重複発言の抽出/CERは改善を実証していない。**v0.1全体は引き続きNo-Go**。
+- 技術的推奨：`speaker_diarization`を重複話者候補の確認表示用として保持し、`exclusive_speaker_diarization`を現行の単語→単一話者割当て用に維持。重複部分のASR再推論や人手訂正UIを別実験してから機能統合する。
+- 詳細：[docs/v01_stage6_community1_overlap_comparison_20261030.md](v01_stage6_community1_overlap_comparison_20261030.md)。
