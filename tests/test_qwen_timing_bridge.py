@@ -97,6 +97,32 @@ class QwenTimingTests(unittest.TestCase):
                          'こんにちははいありがとうございます')
         self.assertEqual(rows[-1]['end'],6.0)
 
+    def test_submillisecond_tail_rounding_keeps_lexical_text(self):
+        data=sample()
+        data[1]['items'][1]['start_time']=2.9996
+        data[1]['items'][1]['end_time']=3.1
+        _,meta=qwen_segments(data,6)
+        self.assertEqual(meta['tail_timestamp_review_tokens'],1)
+
+    def test_multiple_bounded_tail_tokens_maintain_original_order(self):
+        data=sample()
+        data[1]['text']='あ'*6
+        data[1]['items']=[{'text':'あ','start_time':3.1,
+                           'end_time':3.2} for _ in range(6)]
+        words,meta=qwen_segments(data,6)
+        self.assertEqual(meta['tail_timestamp_review_tokens'],6)
+        self.assertEqual(meta['aligned_tokens'],8)
+        self.assertEqual(''.join(w['text'] for seg in words for w in seg['words']),
+                         'こんにちははい'+'あ'*6)
+
+    def test_excessive_hallucinated_tail_tokens_fail_closed(self):
+        data=sample()
+        data[1]['text']='あ'*13
+        data[1]['items']=[{'text':'あ','start_time':3.1,
+                           'end_time':3.2} for _ in range(13)]
+        with self.assertRaisesRegex(ValueError,'Too many Qwen inferred'):
+            qwen_segments(data,6)
+
     def test_excessive_tail_offset_must_fail_not_drop_text(self):
         data=sample()
         data[1]['items'][1]['start_time']=3.9

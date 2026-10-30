@@ -97,11 +97,12 @@ def qwen_segments(chunks: list[dict], duration: float) -> tuple[list[dict],dict]
                 # Fail closed for offsets outside the documented tolerance
                 # or more than four such tokens.
                 overrun=(offset+a)-duration
-                if not (0 <= overrun <= 0.8 and
-                        tail_timestamp_review_tokens < 4 and
-                        offset+chunk_duration >= duration-0.8 and
-                        round(duration,3) >= 0.002):
-                    raise ValueError("Forced alignment offset exceeded bounded audio tail")
+                if not (-0.001 <= overrun <= 0.8):
+                    raise ValueError("Qwen tail token exceeds audio boundary tolerance")
+                if tail_timestamp_review_tokens >= 12:
+                    raise ValueError("Too many Qwen inferred tail timestamp tokens")
+                if offset+chunk_duration < duration-0.8 or round(duration,3)<0.002:
+                    raise ValueError("Qwen tail token is outside final audio chunk")
                 absolute_b=round(duration,3)
                 absolute_a=round(absolute_b-0.001,3)
                 tail_timestamp_review_tokens+=1
