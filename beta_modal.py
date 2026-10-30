@@ -18,7 +18,7 @@ jobs=modal.Dict.from_name('meeting-transcriber-beta-jobs-v1',create_if_missing=T
 web_image=(modal.Image.debian_slim(python_version='3.11')
     .apt_install('ffmpeg')
     .pip_install('fastapi==0.115.12','uvicorn==0.34.2')
-    .add_local_python_source('beta'))
+    .add_local_dir('beta', remote_path='/root/beta'))
 
 gpu_image=(modal.Image.debian_slim(python_version='3.11')
     .apt_install('ffmpeg','libsndfile1')
