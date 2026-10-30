@@ -13,9 +13,10 @@ function fmt(x){return Number(x).toFixed(2)+' 秒';}
 function button(text,callback,cls='subtle'){const el=document.createElement('button');el.textContent=text;el.className=cls;el.type='button';el.onclick=callback;return el;}
 async function list(){
   try{const data=await call('/api/jobs');const root=$('jobs');root.replaceChildren();
+    const labels={uploading:'アップロード中',queued:'GPU待機中',running:'文字起こし処理中',complete:'完了',failed:'失敗'};
     if(!data.jobs.length)root.textContent='まだ処理履歴がありません。';
     for(const job of data.jobs){const div=document.createElement('div');div.className='job';
-      const label=document.createElement('div');const name=document.createElement('strong');name.textContent=job.filename;const meta=document.createElement('span');meta.textContent=`状態: ${job.status} / ${(job.received/1024/1024).toFixed(1)} MiB`;
+      const label=document.createElement('div');const name=document.createElement('strong');name.textContent=job.filename;const meta=document.createElement('span');meta.textContent=`状態: ${labels[job.status]||job.status} / ${(job.received/1024/1024).toFixed(1)} MiB`;
       label.append(name,meta);div.append(label);
       if(job.status==='complete')div.append(button('編集する',()=>openEditor(job.id)));
       if(['failed','complete','uploading'].includes(job.status))div.append(button('削除',async()=>{if(!confirm('録音と結果を削除しますか？'))return;await call('/api/jobs/'+job.id,{method:'DELETE'});if(current===job.id){current=null;$('editor').hidden=true;}await list();}));
