@@ -1,6 +1,12 @@
 """Private modal run entrypoint. No HTTP endpoints; no retained audio volume."""
 from pathlib import Path
+import os
 import modal
+
+# L4 remains the default; alternatives require an explicit validation selection.
+GPU = os.environ.get('TRANSCRIBER_GPU', 'L4')
+if GPU not in ('L4', 'A10', 'L40S'):
+    raise ValueError('TRANSCRIBER_GPU must be L4, A10 or L40S')
 
 app = modal.App('japanese-meeting-transcriber-stage1')
 # Modal resolves Secrets for every Function in the running App, even unused ones.
@@ -24,18 +30,18 @@ image = (
           'HF_HUB_DISABLE_TELEMETRY': '1', 'PYANNOTE_METRICS_ENABLED': '0'})
     .add_local_python_source('transcriber')
 )
-options = dict(image=image, gpu='L4', cpu=(2, 2), memory=(8192, 8192),
+options = dict(image=image, gpu=GPU, cpu=(2, 2), memory=(8192, 8192),
                volumes={'/models': weights}, timeout=900, max_containers=1,
                scaledown_window=2, retries=0, single_use_containers=True)
 
 
 @app.function(**options)
-def gpu_check():
+def gpu_check(expected_gpu: str = 'L4'):
     from transcriber.runtime import diagnostics
-    return diagnostics()
+    return diagnostics(expected_gpu)
 
 
-def _execute(audio, input_name, config_dict, stage, repeat, result_cache):
+def _execute(audio, input_name, config_dict, stage, repeat, result_cache, expected_gpu):
     import json
     import os
     import tempfile
@@ -48,7 +54,7 @@ def _execute(audio, input_name, config_dict, stage, repeat, result_cache):
     if config.enable_diarization and stage != 'asr' and not token:
         raise RuntimeError('Modal Secret transcriber-hf must contain HF_TOKEN')
     started = time.perf_counter()
-    env = diagnostics()
+    env = diagnostics(expected_gpu)
     records, archives = [], []
     with tempfile.TemporaryDirectory(prefix='transcriber-') as folder:
         base = Path(folder)
@@ -78,13 +84,13 @@ def _execute(audio, input_name, config_dict, stage, repeat, result_cache):
 
 # ASR-only never references a Secret, even when it doesn't exist in the account.
 @app.function(**options)
-def asr_only(audio: bytes, input_name: str, config: dict, stage: str, repeat: int, result_cache: bool):
-    return _execute(audio, input_name, config, stage, repeat, result_cache)
+def asr_only(audio: bytes, input_name: str, config: dict, stage: str, repeat: int, result_cache: bool, expected_gpu: str = 'L4'):
+    return _execute(audio, input_name, config, stage, repeat, result_cache, expected_gpu)
 
 
 @diarization_app.function(**options, secrets=[modal.Secret.from_name('transcriber-hf', required_keys=['HF_TOKEN'])])
-def with_diarization(audio: bytes, input_name: str, config: dict, stage: str, repeat: int, result_cache: bool):
-    return _execute(audio, input_name, config, stage, repeat, result_cache)
+def with_diarization(audio: bytes, input_name: str, config: dict, stage: str, repeat: int, result_cache: bool, expected_gpu: str = 'L4'):
+    return _execute(audio, input_name, config, stage, repeat, result_cache, expected_gpu)
 
 
 @app.local_entrypoint()
@@ -109,7 +115,7 @@ def main(audio: str = '', output: str = 'local_runs', stage: str = 'full',
     target.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
     if stage == 'gpu':
-        result = {'environment': gpu_check.remote()}
+        result = {'environment': gpu_check.remote(GPU)}
     else:
         if Path(audio).stat().st_size > 25 * 1024 * 1024:
             raise ValueError('Stage 1 is limited to short test audio of at most 25 MiB')
@@ -118,9 +124,9 @@ def main(audio: str = '', output: str = 'local_runs', stage: str = 'full',
         if function is with_diarization:
             # Start the Secret-bearing App only when diarization was requested.
             with diarization_app.run():
-                result = function.remote(data, Path(audio).name, asdict(config), stage, repeat, result_cache)
+                result = function.remote(data, Path(audio).name, asdict(config), stage, repeat, result_cache, GPU)
         else:
-            result = function.remote(data, Path(audio).name, asdict(config), stage, repeat, result_cache)
+            result = function.remote(data, Path(audio).name, asdict(config), stage, repeat, result_cache, GPU)
         for idx, archive in enumerate(result.pop('archives'), 1):
             (target / f'run-{idx}.zip').write_bytes(archive)
     result['client_wall_seconds'] = time.perf_counter() - started

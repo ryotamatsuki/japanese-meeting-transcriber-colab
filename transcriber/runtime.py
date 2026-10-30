@@ -8,7 +8,13 @@ import threading
 import time
 
 
-def diagnostics():
+def gpu_matches(name, expected_gpu):
+    names = {'L4': ('NVIDIA L4',), 'A10': ('NVIDIA A10', 'NVIDIA A10G'),
+             'L40S': ('NVIDIA L40S',)}
+    return expected_gpu in names and name in names[expected_gpu]
+
+
+def diagnostics(expected_gpu='L4'):
     import torch
     import av
     import ctranslate2
@@ -19,14 +25,14 @@ def diagnostics():
     if not torch.cuda.is_available():
         raise RuntimeError('torch.cuda.is_available() is False; GPU validation failed')
     name = torch.cuda.get_device_name(0)
-    if 'L4' not in name or 'L40' in name:
-        raise RuntimeError('Expected NVIDIA L4, received ' + name)
+    if not gpu_matches(name, expected_gpu):
+        raise RuntimeError('Expected NVIDIA ' + expected_gpu + ', received ' + name)
     # Actually allocate and calculate on CUDA, not only query the driver.
     result = (torch.ones(8, device='cuda') * 2).sum().item()
     torch.cuda.synchronize()
     if result != 16:
         raise RuntimeError('CUDA tensor calculation failed')
-    data = {'python': sys.version, 'gpu': name, 'cuda_available': True,
+    data = {'python': sys.version, 'gpu': name, 'expected_gpu': expected_gpu, 'cuda_available': True,
             'torch_cuda': torch.version.cuda, 'cudnn': torch.backends.cudnn.version(),
             'gpu_total_bytes': torch.cuda.get_device_properties(0).total_memory,
             'ctranslate2_cuda_devices': ctranslate2.get_cuda_device_count(),

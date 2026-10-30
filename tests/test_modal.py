@@ -12,7 +12,8 @@ class ModalStructureTests(unittest.TestCase):
         ast.parse(code)
         for endpoint in ('fastapi_endpoint', 'web_endpoint', 'asgi_app', 'wsgi_app', 'web_server'):
             self.assertNotIn(endpoint, code)
-        self.assertIn("gpu='L4'", code)
+        self.assertIn("os.environ.get('TRANSCRIBER_GPU', 'L4')", code)
+        self.assertIn('gpu=GPU', code)
         asr = (ROOT/'transcriber/asr.py').read_text()
         self.assertIn("COMPUTE = 'float16'", asr)
         self.assertNotIn("else 'cpu'", asr)
@@ -34,6 +35,15 @@ class ModalStructureTests(unittest.TestCase):
                         'torch==2.9.1+cu128','ctranslate2==4.6.2','nvidia-cudnn-cu12==9.10.2.21'):
             self.assertIn(version, pins)
         self.assertIn('huggingface-hub==0.36.0', pins)
+
+    def test_alternative_gpu_cannot_pass_as_l4(self):
+        from scripts.validate_evidence import validate, EvidenceError
+        record = {'environment': {'gpu': 'NVIDIA A10', 'expected_gpu': 'A10',
+                  'cuda_available': True, 'ctranslate2_cuda_devices': 1,
+                  'torch_cuda': '12.8', 'cudnn': 91002}, 'client_wall_seconds': 1}
+        with self.assertRaises(EvidenceError):
+            validate(record, 'gpu')
+        self.assertIn('A10/CUDA', validate(record, 'gpu', expected_gpu='A10'))
 
 
 if __name__ == '__main__': unittest.main()

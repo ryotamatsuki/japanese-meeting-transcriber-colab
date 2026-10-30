@@ -5,7 +5,10 @@ This is a structural consistency check, NOT a speech-accuracy certification.
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from transcriber.runtime import gpu_matches
 
 
 class EvidenceError(ValueError):
@@ -21,7 +24,7 @@ def positive_number(value):
     return type(value) in (int, float) and math.isfinite(value) and value > 0
 
 
-def validate(record, stage, off=False, cache_mode='none'):
+def validate(record, stage, off=False, cache_mode='none', expected_gpu='L4'):
     """Validate an already-finished Modal run; never triggers a GPU job."""
     require(stage in ('gpu', 'asr', 'diarization', 'full'), 'Invalid stage')
     require(cache_mode in ('none', 'model', 'result'), 'Invalid cache mode')
@@ -32,8 +35,10 @@ def validate(record, stage, off=False, cache_mode='none'):
     env = record.get('environment')
     require(isinstance(env, dict), 'Missing runtime environment diagnostics')
     name = env.get('gpu')
-    require(isinstance(name, str) and 'L4' in name and 'L40' not in name,
-            'NVIDIA L4 identity is not recorded')
+    require(gpu_matches(name, expected_gpu),
+            f'NVIDIA {expected_gpu} identity is not recorded')
+    require(env.get('expected_gpu', expected_gpu) == expected_gpu,
+            'Requested GPU differs from validator expectation')
     require(env.get('cuda_available') is True, 'CUDA availability not verified')
     count = env.get('ctranslate2_cuda_devices')
     require(type(count) is int and count >= 1, 'CTranslate2 CUDA device missing')
@@ -43,7 +48,7 @@ def validate(record, stage, off=False, cache_mode='none'):
             'Missing client wall-clock measurement')
     if stage == 'gpu':
         require(not record.get('runs'), 'GPU-only evidence unexpectedly contains inference runs')
-        return 'PASS: L4/CUDA diagnostic evidence present; ASR was NOT tested'
+        return f'PASS: {expected_gpu}/CUDA diagnostic evidence present; ASR was NOT tested'
 
     require(positive_number(record.get('remote_function_seconds')),
             'Missing remote function duration')
@@ -94,11 +99,12 @@ def main():
     parser.add_argument('--stage', required=True,
                         choices=('gpu','asr','diarization','full'))
     parser.add_argument('--off', action='store_true')
+    parser.add_argument('--expected-gpu', default='L4', choices=('L4', 'A10', 'L40S'))
     parser.add_argument('--cache-mode', default='none', choices=('none','model','result'))
     args = parser.parse_args()
     try:
         evidence = json.loads(args.evidence.read_text(encoding='utf-8'))
-        print(validate(evidence, args.stage, args.off, args.cache_mode))
+        print(validate(evidence, args.stage, args.off, args.cache_mode, args.expected_gpu))
     except (OSError, json.JSONDecodeError, EvidenceError) as exc:
         parser.exit(1, f'FAIL: {exc}\n')
 

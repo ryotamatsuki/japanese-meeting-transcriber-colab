@@ -243,3 +243,16 @@ L4容量が戻ったらTest 3、Test 4、Test 5、Test 6を実行する。
 モデルsnapshotの存在だけを重み再利用成功とせず、既存のオフライン再ロード経路で
 実推論して確認する。JSONキャッシュの再利用とは別に計測する。
 独立OFF検証runnerの記録はmodal_validation_off_runner.ymlを参照。
+
+
+### 別GPUで先行検証（2026-10-30 本人承認）
+
+L4は既定のまま、実行時にTRANSCRIBER_GPU=A10（またはL40S）を明示すると
+同じlarge-v3 / Community-1 / CUDA設定で別GPUを要求できる。
+実機名とexpected_gpuをevidenceへ記録し、validatorにも--expected-gpu A10を渡す。
+別GPUの成功でL4条件を満たしたとは扱わない。CPU代替やモデル変更は行わない。
+
+```bash
+TRANSCRIBER_GPU=A10 python -m modal run modal_app.py --stage diarization --audio local_audio/kyoto_two_speakers.ogg --output local_runs/a10-diar
+python scripts/validate_evidence.py local_runs/a10-diar/evidence.json --stage diarization --expected-gpu A10
+```
