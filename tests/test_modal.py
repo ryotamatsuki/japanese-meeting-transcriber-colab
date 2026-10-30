@@ -22,6 +22,10 @@ class ModalStructureTests(unittest.TestCase):
         functions = {n.name:n for n in tree.body if isinstance(n,ast.FunctionDef)}
         self.assertNotIn('secrets', ast.unparse(functions['asr_only'].decorator_list[0]))
         self.assertIn('secrets', ast.unparse(functions['with_diarization'].decorator_list[0]))
+        self.assertEqual(functions['with_diarization'].decorator_list[0].func.value.id,
+                         'diarization_app')
+        for name in ('gpu_check', 'asr_only'):
+            self.assertEqual(functions[name].decorator_list[0].func.value.id, 'app')
         self.assertNotIn('google.colab', '\n'.join(p.read_text() for p in (ROOT/'transcriber').glob('*.py')))
 
     def test_pins_and_notebook_versions(self):

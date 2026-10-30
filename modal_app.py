@@ -3,6 +3,9 @@ from pathlib import Path
 import modal
 
 app = modal.App('japanese-meeting-transcriber-stage1')
+# Modal resolves Secrets for every Function in the running App, even unused ones.
+# Keep this App entirely secret-free for GPU diagnostics, ASR and OFF runs.
+diarization_app = modal.App('japanese-meeting-transcriber-stage1-diarization')
 weights = modal.Volume.from_name('meeting-transcriber-models-v1', create_if_missing=True)
 image = (
     modal.Image.debian_slim(python_version='3.11')
@@ -79,7 +82,7 @@ def asr_only(audio: bytes, input_name: str, config: dict, stage: str, repeat: in
     return _execute(audio, input_name, config, stage, repeat, result_cache)
 
 
-@app.function(**options, secrets=[modal.Secret.from_name('transcriber-hf', required_keys=['HF_TOKEN'])])
+@diarization_app.function(**options, secrets=[modal.Secret.from_name('transcriber-hf', required_keys=['HF_TOKEN'])])
 def with_diarization(audio: bytes, input_name: str, config: dict, stage: str, repeat: int, result_cache: bool):
     return _execute(audio, input_name, config, stage, repeat, result_cache)
 
@@ -112,7 +115,12 @@ def main(audio: str = '', output: str = 'local_runs', stage: str = 'full',
             raise ValueError('Stage 1 is limited to short test audio of at most 25 MiB')
         data = Path(audio).read_bytes()
         function = with_diarization if config.enable_diarization and stage != 'asr' else asr_only
-        result = function.remote(data, Path(audio).name, asdict(config), stage, repeat, result_cache)
+        if function is with_diarization:
+            # Start the Secret-bearing App only when diarization was requested.
+            with diarization_app.run():
+                result = function.remote(data, Path(audio).name, asdict(config), stage, repeat, result_cache)
+        else:
+            result = function.remote(data, Path(audio).name, asdict(config), stage, repeat, result_cache)
         for idx, archive in enumerate(result.pop('archives'), 1):
             (target / f'run-{idx}.zip').write_bytes(archive)
     result['client_wall_seconds'] = time.perf_counter() - started
