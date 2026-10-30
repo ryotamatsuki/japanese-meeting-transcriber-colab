@@ -47,7 +47,7 @@ def export(job, root, config, asr_settings, diar_settings):
         outputs.extend([outdir / 'pyannote_話者区間.csv', outdir / 'pyannote_話者区間.json'])
         # Experimental diagnostic files: never present in baseline output ZIPs.
         if config.quality_experiment:
-            for name in ('pyannote_通常話者区間.json', 'pyannote_補正前話者区間.json', 'pyannote_重複発話確認候補.json'):
+            for name in ('pyannote_通常話者区間.json', 'pyannote_補正前話者区間.json', 'pyannote_重複発話確認候補.json', '話者割当て要確認.json'):
                 p = outdir / name
                 if p.exists():
                     outputs.append(p)
