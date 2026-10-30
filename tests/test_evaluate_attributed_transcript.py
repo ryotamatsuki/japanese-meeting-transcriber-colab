@@ -30,7 +30,7 @@ class AttributedTranscriptTests(unittest.TestCase):
         hyp=[h('話者1','こんにちは'),h('話者不明','余分な発話')]
         score=permutation_cer(ref,hyp)
         self.assertGreater(score['cpcer'],0)
-        self.assertEqual(score['unassigned_characters'],6)
+        self.assertEqual(score['unassigned_characters'],len('余分な発話'))
 
     def test_overlap_diagnostic_references_human_timing(self):
         ref=[r('A','あ',0,5),r('B','い',2,3),r('A','う',6,8)]
