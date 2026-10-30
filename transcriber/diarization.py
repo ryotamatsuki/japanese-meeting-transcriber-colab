@@ -83,6 +83,13 @@ def diarize(job, config, token, metrics):
                         (job["outdir"] / "pyannote_補正前話者区間.json").write_text(
                             json.dumps({"segments": intervals, "settings": DIAR_SETTINGS},
                                        ensure_ascii=False, indent=2), encoding="utf-8")
+                        from .quality import find_overlap_windows
+                        overlap_windows = find_overlap_windows(standard_intervals)
+                        (job["outdir"] / "pyannote_重複発話確認候補.json").write_text(
+                            json.dumps({"warning": "Model-estimated candidate; listen before attribution",
+                                        "segments": overlap_windows, "source": "standard diarization"},
+                                       ensure_ascii=False, indent=2), encoding="utf-8")
+                        metrics["overlap_review_windows"] = len(overlap_windows)
                         metrics["standard_intervals"] = len(standard_intervals)
                         metrics["exclusive_raw_intervals"] = len(intervals)
                     if config.speaker_cleanup_ms:
