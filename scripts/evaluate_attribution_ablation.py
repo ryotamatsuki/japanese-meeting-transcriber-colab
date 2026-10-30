@@ -24,7 +24,7 @@ def annotate_regular(asr_segments, regular_segments, max_nearest_seconds=1.2):
     for s in intervals:
         if not 0<=float(s['start'])<float(s['end']) or not math.isfinite(float(s['end'])):
             raise ValueError('Malformed regular diarization')
-    speakers={s['speaker_id']:f'話者{i+1}' for i,s in enumerate(
+    speakers={speaker:f'話者{i+1}' for i,speaker in enumerate(
         sorted({x['speaker_id'] for x in intervals},
                key=lambda v:min(x['start'] for x in intervals if x['speaker_id']==v)))}
     rows=[]
