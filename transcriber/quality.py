@@ -56,3 +56,41 @@ def collapse_short_islands(segments, *, max_island_seconds=0.10, max_gap_seconds
                     "changed_fragments": replacements,
                     "parameters": {"max_island_seconds": max_island_seconds,
                                    "max_gap_seconds": max_gap_seconds}}
+
+
+def find_overlap_windows(standard_segments, *, minimum_seconds=0.10):
+    """Find concurrent different-speaker activity from regular diarization.
+
+    Uses all start/end events instead of quadratic pairwise comparisons.
+    Returns review candidates only; it is not ground-truth overlap detection.
+    """
+    if not 0 <= minimum_seconds <= 2.0:
+        raise ValueError("Invalid overlap threshold")
+    events = []
+    for s in standard_segments:
+        start, end = float(s["start"]), float(s["end"])
+        if not (math.isfinite(start) and math.isfinite(end) and 0 <= start < end):
+            raise ValueError("Invalid standard diarization segment")
+        who = str(s["speaker_id"])
+        events.extend([(start, 1, who), (end, -1, who)])
+    events.sort(key=lambda x: (x[0], x[1]))
+    if not events:
+        return []
+    from collections import Counter
+    active, windows, previous = Counter(), [], None
+    i = 0
+    while i < len(events):
+        t = events[i][0]
+        participants = sorted(k for k, n in active.items() if n > 0)
+        if previous is not None and t > previous and len(participants) >= 2:
+            candidate = {"start": previous, "end": t, "speaker_ids": participants}
+            if windows and windows[-1]["speaker_ids"] == participants and abs(windows[-1]["end"] - previous) <= 1e-6:
+                windows[-1]["end"] = t
+            else:
+                windows.append(candidate)
+        while i < len(events) and events[i][0] == t:
+            _, delta, speaker = events[i]
+            active[speaker] += delta
+            i += 1
+        previous = t
+    return [w for w in windows if w["end"] - w["start"] >= minimum_seconds]
