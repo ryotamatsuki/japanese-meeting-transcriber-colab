@@ -153,3 +153,11 @@ modal deploy beta_modal.py
 - メトリクスのみ：Stage9 Artifact `12978478673` SHA256 `8ed7e752d08fe3c120b6d8ee2600489cc53cf841b4d674800afda9d7aa147852`、Stage10 Artifact `12978418645` SHA256 `9051ea1170d683b91758fe27699724bcb2016170b2ba8ddbb61ba79bc8d92e80`。両方ChatGPT Libraryへ保全済み。
 - 詳細は[Stage9](v01_stage9_overlap_separation_results_20261030.md)、[Stage10](v01_stage10_asr_model_results_20261030.md)、[事前登録](v01_stage9_10_experiment_protocol_20261030.md)。
 - **Stage9とStage10の初期実験・比較まで完了。ただしv0.1全体はRelease No-Go。** 独立10件以上の現代日本語会議に対する高いCER・cpCER、保存安定性・利用者編集時間の改善を実証していない。
+
+## Stage10 Qwen3-ASR：分割再評価と最終10録音ゲート
+
+- [正しい長時間分割のQwen A10 Run 41060548259](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41060548259)：人手ELANと同一参照で**2/2完走**。対話01 CER 22.708%（large-v3 34.470%、−11.762pt）、対話05 CER 33.408%（large-v3 40.874%、−7.466pt）。Qwenは30秒単位に分割して認識（23/25区間、最大512生成トークン）。長時間音声一括処理による初回の誤った高CER値は**モデル精度指標として使用禁止**。
+- Qwenの日本語認識改善は**2録音限定の探索結果**。時刻付き発話列・日本語cpCER・話者分離との統合は未確認で、v0.1の正式な合格にはならない。
+- [10録音拡張のGPU Action 41061433932](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41061433932)を実行。**10録音すべての結果と人手正解ハッシュの照合が完了するまでは採用判定保留**。
+- 2録音Artifact `12978579578` SHA256 `0b0392fee89b29a4e57e15886191b4591b8718a8b415c3f8c78254e236195e31`。ChatGPT Libraryに保存。
+- [Stage10比較報告](v01_stage10_asr_model_results_20261030.md)。**main・現行ベータ既定`large-v3/beam5`は変更しない、公開No-Go**。
