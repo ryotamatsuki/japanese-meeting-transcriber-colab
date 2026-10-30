@@ -19,6 +19,7 @@ class Config:
     max_speakers: int = 0
     quality_experiment: bool = False
     speaker_cleanup_ms: int = 0
+    asr_beam_size: int = 5
 
     def __post_init__(self):
         counts = (self.expected_speakers, self.min_speakers, self.max_speakers)
@@ -26,6 +27,10 @@ class Config:
             raise ValueError('話者数は0以上の整数で指定してください。')
         if self.min_speakers and self.max_speakers and self.min_speakers > self.max_speakers:
             raise ValueError('MIN_SPEAKERSはMAX_SPEAKERS以下にしてください。')
+        if type(self.asr_beam_size) is not int or self.asr_beam_size not in (5, 8):
+            raise ValueError('asr_beam_size must be 5 (baseline) or 8 (experimental)')
+        if self.asr_beam_size != 5 and not self.quality_experiment:
+            raise ValueError('Nonbaseline ASR beam requires quality_experiment')
         if type(self.quality_experiment) is not bool:
             raise ValueError('quality_experiment must be boolean')
         if type(self.speaker_cleanup_ms) is not int or not 0 <= self.speaker_cleanup_ms <= 300:
@@ -65,6 +70,17 @@ def process(path, output_root, model_cache, config=None, token=None, stage='full
         merge_started = time.perf_counter()
         job['utterances'], job['speaker_map'], job['word_count'] = assign_and_group(
             job['asr_segments'], job['diar_segments'], config.enable_diarization)
+        if config.quality_experiment and config.enable_diarization:
+            from .attribution_review import audit_word_speaker_assignments
+            standard_path = outdir / "pyannote_通常話者区間.json"
+            standard = (json.loads(standard_path.read_text(encoding="utf-8"))["segments"]
+                        if standard_path.exists() else [])
+            audit = audit_word_speaker_assignments(job["asr_segments"], job["diar_segments"],
+                                                   standard)
+            (outdir / "話者割当て要確認.json").write_text(
+                json.dumps(audit, ensure_ascii=False, indent=2), encoding="utf-8")
+            metrics["word_attribution_review_words"] = audit["review_words"]
+            metrics["word_attribution_total_words"] = audit["word_count"]
         zip_path = export(job, output_root, config, asr_settings, diar_settings)
         metrics['alignment_export_seconds'] = time.perf_counter() - merge_started
         metrics['estimated_speakers'] = len(job['speaker_map'])
