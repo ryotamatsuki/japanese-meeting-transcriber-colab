@@ -2,6 +2,12 @@
 
 評価準備日：2026-10-30。リリース判定は **No-Go** を維持する。
 
+## 評価指標の先行研究・公開ベンチマークとの対応
+
+- [MISP Challenge 2025 Task3 公式評価方式](https://mispchallenge.github.io/mispchallenge2025/task3_instructions.html)：話者ごとの発言を時刻順に連結し、話者の全置換に対する文字誤り率の最小値をcpCERとする。本Stageでは、この考え方に従い日本語NFKC正規化を適用する。
+- [CHiME 2023 比較研究](https://www.chimechallenge.org/workshops/chime2023/papers/CHiME_2023_GENERAL_neumann.pdf)：cpWERが話者混同と認識誤りの双方を含むこと、参照または推定話者数が違う場合は空話者列を含めることを説明する。本Stageでは参照2話者の条件を固定し、未割当て文字は明示的に挿入として計上する。
+- 指標名が同じでも、文字正規化・録音・話者数・日本語参照アノテーション条件が異なるため、外部ランキングの値と直接比較しない。
+
 ## 背景と狙い
 - Stage6：Community-1通常出力は排他的出力より10録音すべてで厳格DER/JERが改善。これは話者区間に限る。
 - Stage7：重複候補の確認UIは実装・単一実録音A10 E2Eに合格。しかし重複区間の時間再現率47.79%であり見逃しがある。
