@@ -2,7 +2,8 @@
 --extra-index-url https://download.pytorch.org/whl/cu128
 torch==2.9.1+cu128
 torchaudio==2.9.1+cu128
-torchcodec==0.8.1
+# CPU audio decoding only; both neural models remain CUDA/float16 as applicable.
+torchcodec @ https://download.pytorch.org/whl/cpu/torchcodec-0.8.1-cp311-cp311-manylinux_2_28_x86_64.whl#sha256=585d198f5b092e6f4aed7f1a438a6f68ee3d4ab35816a0cce9d289271d8e6fb4
 faster-whisper==1.2.1
 ctranslate2==4.6.2
 av==18.1.0

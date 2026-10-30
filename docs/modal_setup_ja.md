@@ -177,3 +177,53 @@ Modal Notebooksもブラウザでは提供終了と表示され、新規実行�
 `python -m modal token new`から認証する。Test 1の成功を先に確認する。
 認証トークンはSDKに保存させ、チャットやログに表示しない。
 HF Secretとモデル利用条件は話者分離用であり、Test 1・ASR・OFFには不要。
+
+
+## GitHub Actions経由の実GPU検証（2026-10-30）
+
+この実行環境からの直接CLI接続が制限される場合も、GitHub-hosted runnerから
+Modalへ接続できる。国文祭PoCで成功した経路を今回も確認した。
+本人PCでのCLI認証は唯一の方法ではない。
+
+今回の検証runnerは、既存Environment Secretsがある
+`ryotamatsuki/ehime-kokubunsai-ai-poc`の隔離ブランチ
+`eval/meeting-transcriber-stage1-20261030`に置いた。
+同ブランチの`.github/workflows/modal-deploy.yml`は、文字起こしリポジトリの
+固定コミットをcheckoutし、`modal run`だけを実行する検証workflowである。
+国文祭mainのworkflow・コードや稼働中Appは更新しない。
+認証値の取得・コピー・別リポジトリへの登録は行わず、既存Environment内で注入する。
+実装の修正は文字起こし側の既存ブランチ・Draft PR #1に記録する。
+
+最初の実run `40998500388`はModal接続・認証に成功したが、
+未使用Functionを含むApp全体でSecretを解決するため、
+GPU診断でも`transcriber-hf`未作成エラーで停止した。
+これを修正し、GPU/ASR/OFFのAppと話者分離用Appを分離した。
+話者分離を要求した場合だけ後者を起動する。
+オフライン構造検査だけではこの起動時依存を検出できなかった。
+
+短い公開音声の準備は以下で行える。音声はコミットしない。
+
+```bash
+python scripts/prepare_validation_audio.py
+```
+
+国立国語研究所「方言録音資料シリーズ11 京都市方言」の
+Wikimedia Commons掲載約35秒の女性2話者録音。
+原公開元はシリーズ3〜15の音声をCC BY 4.0で許諾している。
+スクリプトはSHA256を照合し、出典・権利表示を`local_audio/provenance.json`に記録する。
+これは古い方言録音による機能確認であり、一般的な会議音声の精度認証ではない。
+字幕は話者ごとの正解区間ではなく、話者切替えと誤割当ては別途照合する。
+
+出典：https://mmsrv.ninjal.ac.jp/hogenrokuon_siryo/
+音声：https://commons.wikimedia.org/wiki/File:Kyoto_women_conversation_in_1964.ogg
+ライセンス：https://creativecommons.org/licenses/by/4.0/
+
+
+### TorchCodecビルド時の修正
+
+Actions run `40998805817`で依存インストール・pip checkは成功したが、
+GPU未割当のビルド時にCUDA版TorchCodecの共有ライブラリimportが失敗した。
+TorchCodec 0.8.1は公式CPU wheelのURLとSHA256で固定する。
+音声デコードはCPUで行い、Whisper large-v3とCommunity-1の推論は従来どおりL4上で行う。
+モデルのCPUフォールバック・変更・量子化ではない。
+変更後も実ビルドとGPU診断を通るまでは依存環境を認定しない。
