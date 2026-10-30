@@ -143,3 +143,13 @@ modal deploy beta_modal.py
 - [同一ASR固定・3録音のRegular単語話者割当てアブレーション Run 41055452343](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41055452343)：3/3正常処理。**Regularは1件改善、2件悪化、ペア差中央値+0.711pp（cpCER増加）**。Stage6でDER/JERが改善したからといって最終発言帰属の変更を採用しない。
 - 生音声と転写文は保存せず、数値メトリクスのみ。Artifact `12976708710` SHA256 `7f9565b824af6173f6c9200cc9d286a33da8775e7e3b938396f5ac58452fec68`、`12977955960` SHA256 `995a2cc49012a98d9bc062993f1a02054d9dfa649c178b586f64f2ab58c9e9aa`。
 - 詳細：[Stage 8 誤差・採否分析](v01_stage8_attributed_transcript_results_20261030.md)。**Release No-Go維持**。現行ASRとExclusive話者帰属のデフォルト、重複要確認UIは現状のまま。
+
+## Stage 9・10 - 2026-10-30：音源分離と日本語ASRモデルの比較
+
+- [Stage9 A10 Run #41060111462](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41060111462)：**2/2短区間完走**。日本語2話者の人手ELANオラクル選択重複部分を使い、混合音声／英語WSJ学習SepFormerによる分離音声／本物の独立話者録音を同一Whisperで比較。録音01 cpCER 62.16%→56.76%→10.81%、録音05 46.67%→46.67%→35.56%。**実分離は1/2例で改善、1/2不変。採用不可**。2秒〜6秒程度の一部区間であって一般評価ではない。
+- [Stage10 Whisper A10 Run #41058590441](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41058590441)：日本語対話01/05/08で**9/9完走**。全文連結CER中央値large-v3 beam5:40.874%、beam8:40.404%、large-v3-turbo beam5:42.848%。合計ASR推論時間131.516/131.769/50.578秒。beam8の精度改善は小幅（3件中1件悪化）、turboは**約2.60倍高速だが3件中2件悪化**。よってデフォルトはlarge-v3 beam5のまま。
+- Qwen3-ASR-1.7Bは2026年にリリースされた候補として独立実験。最初の音声を分割しない評価は生成文字数を不当に制限したため**無効**。30秒区間に分割した再測定で評価する。数値が揃うまで採否に利用しない。
+- 英語分離モデルの適用限界および正解話者別録音が**実運用で利用できない理想条件**であることに注意。生音声・人手書き起こし全文は成果物に含めない。
+- メトリクスのみ：Stage9 Artifact `12978478673` SHA256 `8ed7e752d08fe3c120b6d8ee2600489cc53cf841b4d674800afda9d7aa147852`、Stage10 Artifact `12978418645` SHA256 `9051ea1170d683b91758fe27699724bcb2016170b2ba8ddbb61ba79bc8d92e80`。両方ChatGPT Libraryへ保全済み。
+- 詳細は[Stage9](v01_stage9_overlap_separation_results_20261030.md)、[Stage10](v01_stage10_asr_model_results_20261030.md)、[事前登録](v01_stage9_10_experiment_protocol_20261030.md)。
+- **Stage9とStage10の初期実験・比較まで完了。ただしv0.1全体はRelease No-Go。** 独立10件以上の現代日本語会議に対する高いCER・cpCER、保存安定性・利用者編集時間の改善を実証していない。
