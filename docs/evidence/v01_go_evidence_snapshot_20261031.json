@@ -12,10 +12,20 @@
     "short_web_e2e_success": true,
     "short_explicit_deletion_verified": true,
     "longform": {
-      "independent_recordings": 0,
+      "independent_recordings": 2,
+      "source_ids": [
+        "IngCrowd/japanese-themed-dialogue01",
+        "IngCrowd/japanese-themed-dialogue05"
+      ],
       "human_check_final_minute": false,
-      "edit_export_delete_verified": false,
-      "fresh_runs_pass": false
+      "edit_export_delete_verified": true,
+      "fresh_runs_pass": true,
+      "verification_run_ids": [
+        41092963562,
+        41091559990
+      ],
+      "common_repo_commit": "0f2c7da32dbeae4afffdb5815ce0cc62194e5e5e",
+      "synthetic_repeated_input": true
     }
   },
   "quality": {
