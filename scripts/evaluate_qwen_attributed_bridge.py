@@ -35,6 +35,7 @@ def score(eaf:Path,qwen_timed:Path,diar_archive:Path):
         'utterances':quality['utterance_count'],
         'aligned_tokens':quality['aligned_tokens'],
         'text_preserved':quality['all_normalized_text_preserved'],
+        'lexical_redistribution_chunks':quality.get('lexical_redistribution_chunks',0),
         'last_word_end_seconds':quality['final_word_end_seconds'],
         'qwen_alignment_seconds':prediction['qwen_alignment_inference_seconds'],
         'qwen_model_load_seconds':prediction['qwen_model_load_seconds'],

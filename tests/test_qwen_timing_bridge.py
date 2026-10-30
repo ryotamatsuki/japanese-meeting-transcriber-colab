@@ -69,6 +69,22 @@ class QwenTimingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             attribute_qwen(data,[{'start':0,'end':6,'speaker_id':'A'}],6)
 
+    def test_safe_lexical_redistribution_preserves_qwen_original(self):
+        data=sample()
+        data[0]['items'][0]['text']='こんにちわ'
+        rows,meta=attribute_qwen(data,[{'start':0,'end':3,'speaker_id':'A'},
+                                        {'start':3,'end':6,'speaker_id':'B'}],6)
+        self.assertEqual(meta['lexical_redistribution_chunks'],1)
+        self.assertTrue(meta['all_normalized_text_preserved'])
+        self.assertEqual(''.join(x['text'] for x in rows),
+                         'こんにちは。はいありがとうございます。')
+
+    def test_large_lexical_difference_is_not_silently_repaired(self):
+        data=sample()
+        data[0]['items'][0]['text']='かかかかか'
+        with self.assertRaises(ValueError):
+            qwen_segments(data,6)
+
     def test_rejects_unknown_speaker_model(self):
         with self.assertRaises(ValueError):
             attribute_qwen(sample(),[],6)

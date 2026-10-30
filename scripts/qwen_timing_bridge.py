@@ -10,6 +10,44 @@ from transcriber.alignment import assign_and_group
 from scripts.evaluate_asr_cer import normalized_ja
 
 
+def _restore_qwen_text_at_aligned_token_boundaries(text: str, items: list[dict]):
+    """Research-only: retain Qwen lexical content with aligner-derived spans.
+
+    Allows only low-distance, equal-normalized-length substitutions.
+    Token boundaries remain inferred, NOT verified true word boundaries.
+    Return unchanged stamps if confidence guards fail.
+    """
+    from scripts.evaluate_asr_cer import edit_distance
+    source=normalized_ja(text)
+    predicted=normalized_ja(''.join(str(x['text']) for x in items))
+    if source==predicted:
+        return items,False
+    if not items or not source or len(source)!=len(predicted):
+        return items,False
+    if edit_distance(source,predicted)>max(2,len(source)//20):
+        return items,False
+    cursor=0
+    rebuilt=[]
+    for i,item in enumerate(items):
+        required=len(normalized_ja(str(item['text'])))
+        if i==len(items)-1:
+            end=len(text)
+        else:
+            end=cursor
+            while end<len(text) and len(normalized_ja(text[cursor:end]))<required:
+                end+=1
+            while end<len(text) and not normalized_ja(text[end]):
+                end+=1
+        piece=text[cursor:end]
+        if len(normalized_ja(piece))!=required:
+            return items,False
+        rebuilt.append({**item,'text':piece})
+        cursor=end
+    if cursor!=len(text) or ''.join(x['text'] for x in rebuilt)!=text:
+        return items,False
+    return rebuilt,True
+
+
 def qwen_segments(chunks: list[dict], duration: float) -> tuple[list[dict],dict]:
     if not chunks or not (0 < float(duration) <= 3600):
         raise ValueError("Invalid audio or empty Qwen chunks")
@@ -17,6 +55,7 @@ def qwen_segments(chunks: list[dict], duration: float) -> tuple[list[dict],dict]
         raise ValueError("Too many Qwen chunks")
     result=[]
     words_count=0
+    lexical_redistribution_chunks=0
     lexical_input=[]
     lexical_alignment=[]
     maximum=0.
@@ -32,6 +71,8 @@ def qwen_segments(chunks: list[dict], duration: float) -> tuple[list[dict],dict]
         text=str(chunk['text'])
         lexical_input.append(text)
         stamps=chunk.get('items') or []
+        stamps,reallocated=_restore_qwen_text_at_aligned_token_boundaries(text,stamps)
+        lexical_redistribution_chunks+=int(reallocated)
         if text.strip() and not stamps:
             raise ValueError("No alignment for nonempty Qwen transcript")
         sub=[]
@@ -79,7 +120,8 @@ def qwen_segments(chunks: list[dict], duration: float) -> tuple[list[dict],dict]
     return result,{'aligned_tokens':words_count,
         'normalized_text_characters':len(joined),
         'text_preserved':True,'final_word_end_seconds':maximum,
-        'chunk_count':len(chunks)}
+        'chunk_count':len(chunks),
+        'lexical_redistribution_chunks':lexical_redistribution_chunks}
 
 
 def attribute_qwen(chunks: list[dict], diarization: list[dict], duration: float):
