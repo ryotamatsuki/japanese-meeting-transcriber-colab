@@ -1,0 +1,258 @@
+# Stage 1：Modal L4での検証手順
+
+現状は実装・オフライン回帰テストまで。GPU動作保証ではありません。
+結果：[Stage 1報告書](modal_stage1_report_ja.md)。公開API・UI・常駐サービスは作りません。
+
+## 1. 認証と依存関係
+
+```bash
+python -m venv .venv-modal
+source .venv-modal/bin/activate
+python -m pip install modal==1.4.3
+modal token new
+```
+
+Modalアカウントの残高・予算・課金設定を本人が確認してください。
+この手順はGPUを消費します。課金の有効化や追加支出の承認は自動で行いません。
+Modal認証情報をリポジトリやチャットに貼らないでください。
+
+話者分離を使う場合だけ、[Community-1](https://huggingface.co/pyannote/speaker-diarization-community-1)の利用条件に同意し、Readトークンを用意します。
+Modal DashboardのSecretsで **transcriber-hf** を作り、キー **HF_TOKEN** に登録します。
+トークンをCLI引数・コード・ログに記載しないでください。ASR単独・話者分離OFFではSecretの作成自体が不要です。
+Community-1ロード時に権限・利用条件・ネットワーク・依存関係のエラーを表示します。Secret未作成ならModalが開始前にエラーを返します。
+
+イメージはPython 3.11、CUDA 12.8対応PyTorch 2.9.1／cuDNN 9、faster-whisper 1.2.1、pyannote.audio 4.0.7、PyAV 18.1.0。
+`requirements-modal.lock` に推移依存も固定しています。PyTorchとTorchCodecの対応表に合わせTorchCodec 0.8.1を使用します。
+Modalイメージビルド時にpip checkと全ライブラリのimportを実施し、pip freezeを証拠に保存します。実行ごとのpip installはありません。
+OSパッケージ・ベースイメージとモデルrevisionは完全固定していないため、バイト単位の環境再現は未保証です。
+実GPUでの整合性確認後、取得したモデルsnapshotとビルド情報を基準に確定してください。
+
+
+Windows PowerShellで実行する場合は、上記の仮想環境作成・有効化を次に置き換えます。
+
+```powershell
+py -3.11 -m venv .venv-modal
+.\\.venv-modal\\Scripts\\Activate.ps1
+python -m pip install modal==1.4.3
+modal token new
+modal token info
+```
+
+認証にはブラウザでのログインが使えますが、`modal run` 自体はPythonとModal CLIが動く端末（ローカルPC、Codespaces等）から実行します。ModalのWebダッシュボードを開いているだけではStage 1のGPU検証は開始されません。
+
+## 2. テスト音声
+
+`local_audio/two_speakers.wav` に、**公開可能な日本語を2人が交互に発話する30〜60秒程度の自作録音**を置きます。
+庁内会議、個人名、非公開情報は使わないでください。Stage 1のアップロード上限は25 MiBです。
+無音・正弦波で代用しません。公開データを使う場合は出典・ライセンス・利用条件を別途記録します。
+
+次の情報をローカルに記録します（GitHubには入れません）。
+
+- 音声の作成日、権利根拠、SHA256、音声長、実際の話者数
+- 正解の日本語発話と、どちらがいつ話したかの区間（匿名A/B）
+- 例：Aが冒頭、Bが次、Aが最後。各人複数秒の発話を確保する
+
+人数だけで精度を判定せず、文字列・話者切替え・誤割当てを原音声と照合します。
+
+## 3. 実行（順番を守る）
+
+```bash
+# Test 1：L4・CUDA tensor演算・CTranslate2・importを確認
+modal run modal_app.py --stage gpu --output local_runs/01-gpu
+
+# Test 2：Whisper large-v3単独。HF Secret不要
+modal run modal_app.py --stage asr --audio local_audio/two_speakers.wav --output local_runs/02-asr
+python scripts/validate_run.py local_runs/02-asr/run-1.zip --stage asr
+
+# Test 3：Community-1単独。まず人数を固定せず推定人数を比較する
+modal run modal_app.py --stage diarization --audio local_audio/two_speakers.wav --output local_runs/03-diar
+python scripts/validate_run.py local_runs/03-diar/run-1.zip --stage diarization
+
+# Test 4：統合（TXT/CSV/SRT/JSON/ZIP）。必要なら --expected-speakers 2
+modal run modal_app.py --audio local_audio/two_speakers.wav --output local_runs/04-full
+python scripts/validate_run.py local_runs/04-full/run-1.zip
+
+# Test 5：HF Secretを参照しない、話者分離OFFの別Function
+modal run modal_app.py --audio local_audio/two_speakers.wav --no-diarization --output local_runs/05-off
+python scripts/validate_run.py local_runs/05-off/run-1.zip --off
+
+# Test 6a：モデル重みの再利用。各回の結果フォルダは別。
+# 2回目はHF Hubをオフラインにし、実際にモデルを再ロード・再推論する。
+modal run modal_app.py --audio local_audio/two_speakers.wav --repeat 2 --output local_runs/06-model-cache
+
+# Test 6b：同一結果フォルダでASR・話者分離JSONの再利用。
+modal run modal_app.py --audio local_audio/two_speakers.wav --repeat 2 --result-cache --output local_runs/07-result-cache
+```
+
+`--glossary '用語1、用語2'`、`--expected-speakers`、`--min-speakers`、`--max-speakers`、`--language ja/auto/en`を指定できます。
+large-v3／CUDA／float16は固定です。GPU不調時にCPUや小型モデルへフォールバックしません。
+既定の総処理タイムアウトは900秒、同時コンテナは1、リトライは0、CPUは2物理コア、ホストメモリは8 GiBです。
+1つの呼出し終了後はsingle-use containerを破棄します。最大2回に制限し、長時間ベンチマークはしません。
+
+## 4. 証拠の読み方
+
+各出力先に `evidence.json` と推論結果の `run-N.zip` が保存されます。音声本文は標準出力に表示しません。
+JSONにはGPU名、CUDA、cuDNN、全主要バージョン、pip freeze、モデルsnapshot、ロード時間・推論時間・統合出力時間を記録します。
+`model_downloads_disabled=true` の回が成功し、result cache hitがfalseならモデルキャッシュの証拠です。
+`asr_result_cache_hit`・`diarization_result_cache_hit` がtrueなら結果キャッシュの証拠です。
+結果キャッシュhitの回にはモデルロード・推論時間がなく、処理速度比較に混ぜません。
+
+GPUメモリはnvidia-smiによる200ms間隔の観測ピークです。CTranslate2も含みますが、サンプル間の瞬間最大値は捉えられません。
+`gpu_memory_sample_errors` が0か確認します。PyTorch allocatorだけの値で全体の最大使用量を主張しません。
+`client_wall_seconds` はlocal_entrypoint内の計測で、キュー・転送等を含みます。CLI初期化・イメージビルドなどentrypoint開始前の時間は含まず、コンテナ起動時間・請求時間ではありません。
+純粋なコンテナ起動時間と請求対象時間はModal Dashboardのログ・メトリクスで別途確認してください。
+Whisper推論にはジェネレータの全消費、話者分離にはwav変換を含みます。
+音声長に対する速度は、初回の `audio_seconds / pipeline_seconds` などで比較します（初回ダウンロードの有無を注記）。
+
+ZIPの構造検査は認識精度の合格判定ではありません。
+`pyannote_話者区間.json` と原音声の正解区間を比較し、人数、切替え時刻、誤割当て、短い相づちを記録します。
+Colab版との精度比較は同じ音声・設定で別途実行し、双方のモデルsnapshotと出力を照合してください。
+
+```bash
+# 実測されたコンテナ稼働時間が分かれば指定。未指定はFunction内実測時間による限定的概算。
+python scripts/estimate_cost.py local_runs/04-full/evidence.json --billable-seconds SECONDS
+```
+
+概算は[公式料金](https://modal.com/pricing)（2026-10-29参照）のL4、CPU、8 GiBメモリに基づきます。
+Volumeは `--model-gib` と `--retention-days` で加算可能。無料枠・ネットワーク料金・ビルド費用等は別扱いです。
+
+
+### GPU実行証拠の構造検査（追加）
+
+ZIPの構造検査とは別に、`evidence.json` が本当にL4/CUDA環境を記録し、指定ステージでモデルロードと推論が実行されたか、GPU使用量・経過時間・キャッシュ状態を機械的に点検します。
+
+```bash
+python scripts/validate_evidence.py local_runs/01-gpu/evidence.json --stage gpu
+python scripts/validate_evidence.py local_runs/02-asr/evidence.json --stage asr
+python scripts/validate_evidence.py local_runs/03-diar/evidence.json --stage diarization
+python scripts/validate_evidence.py local_runs/04-full/evidence.json --stage full
+python scripts/validate_evidence.py local_runs/05-off/evidence.json --stage full --off
+python scripts/validate_evidence.py local_runs/06-model-cache/evidence.json --stage full --cache-mode model
+python scripts/validate_evidence.py local_runs/07-result-cache/evidence.json --stage full --cache-mode result
+```
+
+判定は証拠JSONの**構造と内部整合性**についてのみです。実際のクラウド実行を確認するにはModal Dashboardの実行ログ・課金メトリクスを照合します。音声認識精度や話者分離精度を保証するものでもありません。GPUが未起動の場合、検証すべき実測JSON自体が存在しないのでPASSにはなりません。
+
+## 5. データ保存と削除
+
+- **/models**：専用Modal Volume `meeting-transcriber-models-v1`。Whisper・HFモデル重みのみ。HF_TOKENを保存するlogin処理はしません。
+- **入力・結果**：GPUコンテナのTemporaryDirectory。リモート処理終了時（例外時も）に削除。結果は呼出し元にZIPとして返します。
+- **結果キャッシュ**：同一呼出し内で2回処理するときだけ保持。別呼出し間の結果永続化はStage 1では実装しません。
+- **ローカル**：`local_audio/` と `local_runs/`。検証後、必要な証拠を手元に保管して不要データを削除してください。
+- **モデル保存を終了**：Modal Dashboardから専用Volumeを削除できます。他アプリと共有しないでください。
+
+元音声はZIPに含めません。例外ログにはライブラリ由来のファイル名などが含まれる場合があるため、公開可能なテスト音声と匿名ファイル名を使用してください。
+モデル初回ダウンロード中のライブラリログは表示される場合があります。HF HubのHTTP認証エラーはトークンや認証URLを出さずに説明する例外に置き換えています。CUDA・依存関係などの他の例外は原因調査のため伝播させます。
+
+## 6. オフライン回帰テスト
+
+```bash
+python tests/check_notebook.py
+python -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+これらはモデルをダウンロードせず、モックを使った検査を含みます。GPU推論の代わりにはなりません。
+
+## 参考（公式）
+
+- https://modal.com/docs/guide/gpu
+- https://modal.com/docs/guide/cuda
+- https://modal.com/docs/guide/images
+- https://modal.com/docs/guide/volumes
+- https://modal.com/docs/guide/secrets
+- https://github.com/SYSTRAN/faster-whisper#gpu
+- https://github.com/meta-pytorch/torchcodec#installing-torchcodec
+- https://pytorch.org/get-started/previous-versions/
+
+
+## CLI接続とブラウザログインを切り分ける（2026-10-29追記）
+
+ブラウザにログイン済みでも、この実行環境では`modal token new`が
+認証URLの発行前に`Could not connect to the Modal server.`で停止した。
+`api.modal.com`の名前解決失敗を確認しており、HF Secret登録とは別の問題である。
+ブラウザCookieやAPIキーをコピーして接続問題を回避しない。
+Modal Notebooksもブラウザでは提供終了と表示され、新規実行の代替には使えない。
+
+通常接続できる本人PCでは、既存のWindows手順で作業ブランチを更新し、
+`python -m modal token new`から認証する。Test 1の成功を先に確認する。
+認証トークンはSDKに保存させ、チャットやログに表示しない。
+HF Secretとモデル利用条件は話者分離用であり、Test 1・ASR・OFFには不要。
+
+
+## GitHub Actions経由の実GPU検証（2026-10-30）
+
+この実行環境からの直接CLI接続が制限される場合も、GitHub-hosted runnerから
+Modalへ接続できる。国文祭PoCで成功した経路を今回も確認した。
+本人PCでのCLI認証は唯一の方法ではない。
+
+今回の検証runnerは、既存Environment Secretsがある
+`ryotamatsuki/ehime-kokubunsai-ai-poc`の隔離ブランチ
+`eval/meeting-transcriber-stage1-20261030`に置いた。
+同ブランチの`.github/workflows/modal-deploy.yml`は、文字起こしリポジトリの
+固定コミットをcheckoutし、`modal run`だけを実行する検証workflowである。
+国文祭mainのworkflow・コードや稼働中Appは更新しない。
+認証値の取得・コピー・別リポジトリへの登録は行わず、既存Environment内で注入する。
+実装の修正は文字起こし側の既存ブランチ・Draft PR #1に記録する。
+
+最初の実run `40998500388`はModal接続・認証に成功したが、
+未使用Functionを含むApp全体でSecretを解決するため、
+GPU診断でも`transcriber-hf`未作成エラーで停止した。
+これを修正し、GPU/ASR/OFFのAppと話者分離用Appを分離した。
+話者分離を要求した場合だけ後者を起動する。
+オフライン構造検査だけではこの起動時依存を検出できなかった。
+
+短い公開音声の準備は以下で行える。音声はコミットしない。
+
+```bash
+python scripts/prepare_validation_audio.py
+```
+
+国立国語研究所「方言録音資料シリーズ11 京都市方言」の
+Wikimedia Commons掲載約35秒の女性2話者録音。
+原公開元はシリーズ3〜15の音声をCC BY 4.0で許諾している。
+スクリプトはSHA256を照合し、出典・権利表示を`local_audio/provenance.json`に記録する。
+これは古い方言録音による機能確認であり、一般的な会議音声の精度認証ではない。
+字幕は話者ごとの正解区間ではなく、話者切替えと誤割当ては別途照合する。
+
+出典：https://mmsrv.ninjal.ac.jp/hogenrokuon_siryo/
+音声：https://commons.wikimedia.org/wiki/File:Kyoto_women_conversation_in_1964.ogg
+ライセンス：https://creativecommons.org/licenses/by/4.0/
+
+
+### TorchCodecビルド時の修正
+
+Actions run `40998805817`で依存インストール・pip checkは成功したが、
+GPU未割当のビルド時にCUDA版TorchCodecの共有ライブラリimportが失敗した。
+TorchCodec 0.8.1は公式CPU wheelのURLとSHA256で固定する。
+音声デコードはCPUで行い、Whisper large-v3とCommunity-1の推論は従来どおりL4上で行う。
+モデルのCPUフォールバック・変更・量子化ではない。
+変更後も実ビルドとGPU診断を通るまでは依存環境を認定しない。
+
+
+### L4容量待ちでの中断と再開（2026-10-30）
+
+実ビルド・L4診断・large-v3単独推論は成功したが、Community-1とOFFは
+L4 worker割当待ちでクライアントtimeoutになった。認可エラーとは区別する。
+長時間の無制限再試行は避け、GNU timeoutで600秒などの上限を設ける。
+結果をalways artifactで保存し、Modal側にもlive / pendingの処理が残らないことを確認する。
+待機をモデルロード・純粋起動時間・請求時間に加算しない。
+
+現在のtranscriber-hf Secretを作り直す必要はない。
+L4容量が戻ったらTest 3、Test 4、Test 5、Test 6を実行する。
+モデル取得で403等が出た場合だけ、本人がCommunity-1条件・Read権限を確認する。
+モデルsnapshotの存在だけを重み再利用成功とせず、既存のオフライン再ロード経路で
+実推論して確認する。JSONキャッシュの再利用とは別に計測する。
+独立OFF検証runnerの記録はmodal_validation_off_runner.ymlを参照。
+
+
+### 別GPUで先行検証（2026-10-30 本人承認）
+
+L4は既定のまま、実行時にTRANSCRIBER_GPU=A10（またはL40S）を明示すると
+同じlarge-v3 / Community-1 / CUDA設定で別GPUを要求できる。
+実機名とexpected_gpuをevidenceへ記録し、validatorにも--expected-gpu A10を渡す。
+別GPUの成功でL4条件を満たしたとは扱わない。CPU代替やモデル変更は行わない。
+
+```bash
+TRANSCRIBER_GPU=A10 python -m modal run modal_app.py --stage diarization --audio local_audio/kyoto_two_speakers.ogg --output local_runs/a10-diar
+python scripts/validate_evidence.py local_runs/a10-diar/evidence.json --stage diarization --expected-gpu A10
+```

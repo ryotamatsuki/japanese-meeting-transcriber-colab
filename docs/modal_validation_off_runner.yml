@@ -1,0 +1,46 @@
+name: Transcriber Stage 1 diarization OFF verification
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: meeting-transcriber-stage1-validation
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: ehime-kokubunsai-ai-poc
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ryotamatsuki/japanese-meeting-transcriber-colab
+          ref: 37071dbb3197dae59b37fccfab034242a256c977
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare SDK and licensed audio
+        run: |
+          python -m pip install modal==1.4.3
+          test -n "$MODAL_TOKEN_ID"
+          test -n "$MODAL_TOKEN_SECRET"
+          mkdir -p local_runs
+          python scripts/prepare_validation_audio.py
+          cp local_audio/provenance.json local_runs/audio-provenance.json
+      - name: Test 5 - diarization OFF without HF Secret
+        run: |
+          set -o pipefail
+          timeout --signal=TERM --kill-after=30s 180s python -m modal run modal_app.py --audio local_audio/kyoto_two_speakers.ogg --no-diarization --output local_runs/05-off 2>&1 | tee local_runs/05-off.log
+          python scripts/validate_evidence.py local_runs/05-off/evidence.json --stage full --off
+          python scripts/validate_run.py local_runs/05-off/run-1.zip --off
+      - name: Save evidence even if capacity unavailable
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: transcriber-stage1-off-${{ github.run_id }}
+          path: local_runs/
+          retention-days: 7

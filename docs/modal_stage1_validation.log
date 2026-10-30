@@ -1,0 +1,93 @@
+PASS: notebook clean, 20 cells, Python syntax OK, speaker alignment OK
+test_no_public_endpoint_or_cpu_fallback (test_modal.ModalStructureTests.test_no_public_endpoint_or_cpu_fallback) ... ok
+test_pins_and_notebook_versions (test_modal.ModalStructureTests.test_pins_and_notebook_versions) ... ok
+test_secret_only_on_diarization_function (test_modal.ModalStructureTests.test_secret_only_on_diarization_function) ... ok
+test_result_cache_reuse_and_invalidation (test_transcriber.AsrCacheTests.test_result_cache_reuse_and_invalidation) ... ok
+test_alignment_matches_notebook (test_transcriber.RegressionTests.test_alignment_matches_notebook) ... ok
+test_config_and_token_validation (test_transcriber.RegressionTests.test_config_and_token_validation) ... ok
+test_export_bytes_match_notebook (test_transcriber.RegressionTests.test_export_bytes_match_notebook) ... ok
+test_processor_off_with_inference_doubles (test_transcriber.RegressionTests.test_processor_off_with_inference_doubles) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.082s
+
+OK
+作成: sample_文字起こし結果.zip / 0.0 MiB
+作成: sample_文字起こし結果.zip / 0.0 MiB
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Token missing. Could not authenticate client. If you have token credentials, │
+│ see modal.com/docs/reference/modal.config for setup help. If you are a new   │
+│ user, register an account at modal.com, then run `modal token new`.          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+=== 2026-10-29 Browser continuation (sanitized) ===
+PR #1 head fetched: 50f254bbc25d6bd09031b43cef6e27507ebe9c0f
+git merge --ff-only: PASS
+python tests/check_notebook.py: PASS (20 cells)
+python -m unittest discover -s tests -p 'test_*.py' -v: PASS (17 tests, offline)
+python -m compileall -q transcriber modal_app.py scripts: PASS
+Browser: Modal logged in, workspace ryota-matsuki / main, Starter
+Browser: credits $30.00, cycle usage $0.00, workspace usage limit $30
+Browser: concurrent GPU limit 10, used 0; container limit 100, used 0
+Browser: transcriber-hf absent; creation form prepared, value empty, not submitted
+Browser: HF Community-1 logged out; acceptance status unknown
+Browser: Modal Notebooks sunset; no browser-native notebook execution available
+python -m modal token new: EXIT 1 before auth URL
+Error: Could not connect to the Modal server.
+Modal SDK: 1.4.3; server https://api.modal.com
+socket.getaddrinfo(api.modal.com,443): gaierror
+HTTPS API root: HTTP 415; Modal website: HTTP 200 (not gRPC success)
+GPU build/run: NOT STARTED. Tests 1-6: NOT EXECUTED.
+No execution IDs, GPU outputs, timing or billing evidence produced.
+No billing settings changed; no credentials/audio/results committed.
+
+=== 2026-10-30 Actions continuation (sanitized) ===
+Cloud browser: Modal signed in, ryota-matsuki / main.
+Existing Modal credentials found by NAME ONLY in cultural bot GitHub Environment.
+No values extracted/copied; isolated runner branch used, no production deploy.
+Actions 40998500388: authenticated, failed on unused Function transcriber-hf Secret.
+Fix: separate default and diarization Apps; commit cd6636c.
+Actions 40998805817: install + pip check PASS, torchcodec CUDA import FAIL.
+Fix: official torchcodec 0.8.1 CPU audio-decoder wheel, URL + SHA256 pin.
+Both neural model definitions remain CUDA/L4, no CPU model fallback.
+Local regression: notebook check + 17 unittest PASS.
+Implementation commit b7bf442; CI 40999216987 PASS.
+Actions 40999313679: Test 1 PASS, validate_evidence --stage gpu PASS.
+Test 1 App ap-ixJoxZE95dtW7KuGmItKmy; Function fu-CSAuQslqKFgSr7SeOtfxCO.
+Test 2 App ap-PBLmIpjIwEOxnUT3r1FYfN; Function fu-uYLGsE4rBka7qXpeqN3BGH.
+Test 2: queued for GPU_L4 capacity as of 12:53:49 JST, not inference success.
+Licensed Japanese two-speaker source prepared, 34.579375 seconds.
+Test 3-6 remain pending. Secret form prepared, value empty and not submitted.
+
+HF Secret creation confirmed by name/key only; value not read.
+Run 40999313679 cancelled after prolonged ASR L4 scheduling wait.
+Its Test 1 step succeeded; artifact 12952759823 recovered and independently validated.
+NVIDIA L4; torch_cuda 12.8; cudnn 91002; CT2 CUDA devices 1.
+Dashboard Test 1 startup 4.40s; execution 14.11s; status Succeeded.
+Diagnostic instantaneous nvidia-smi memory 228MiB (not model peak).
+Run 41001086758: Test 2 PASS including Japanese/words/ZIP/evidence validation.
+Test 2 App ap-oku3npcbfnF7rNepLaImgS.
+Test 3 App ap-gTQ5or6dldrqH1M5qpl1Xx; waiting on GPU_L4 capacity.
+Timing note corrected: local_entrypoint clock excludes earlier setup/image build.
+
+2026-10-30 real Modal validation, final ASR evidence:
+run=41001086758, source=f7aa4367080c247b20a2cdf0b932603d1b33a262
+Test2 PASS app=ap-oku3npcbfnF7rNepLaImgS function=fu-FNyuLwgDozCx6sHyhVd7su
+NVIDIA L4; large-v3; faster-whisper 1.2.1; CUDA float16
+ASR load=30.950656724s inference=6.058045705s audio=34.579375s sampled_gpu=4214MiB
+13 segments / 184 words; UTF-8 JSON and timestamps checked; local validators PASS
+Modal UI: Startup=7.49s Execution=1m1s Succeeded; app usage=$0.02 rounded
+Test3 attempted: app=ap-gTQ5or6dldrqH1M5qpl1Xx function=fu-rPToc1Hlm40cyYDxmyKY6Z
+GPU_L4 worker capacity unavailable before inference; client timeout=600s exit=124
+App stopped after local client disconnected; 0 live containers / 0 running calls
+Test4 and Test6 skipped; Community-1 model access/accuracy unverified
+Artifact=12953802803 SHA256=ce6e4a92a8916507bc7e8e365067b5ca5ec4e4f4c61204c53335ab234a766936
+Raw evidence retained locally, not committed. Stage1 incomplete.
+
+Independent Test5 run=41002514566 source=37071dbb3197dae59b37fccfab034242a256c977
+app=ap-iOSdjxhqlw0nM5NSNUVb5m function=fu-XNEAfa4KGmMfssSVZEM5ff
+HF Secret-free app created; GPU_L4 capacity wait; timeout=180s exit=124
+No output ZIP/evidence; Test5 is NOT PASS
+Artifact=12954326457 SHA256=4a5344c2707d87663d1d8f877bdd00bfedc574e62fc74c6da89e3cd320cf1cfe
+Test1 PASS, Test2 PASS, Test3 attempt FAIL (inference not run), Test4 not run,
+Test5 attempt FAIL (inference not run), Test6 not run. Stage1 incomplete.
