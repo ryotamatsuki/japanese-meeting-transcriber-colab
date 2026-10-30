@@ -22,13 +22,15 @@ image=(modal.Image.debian_slim(python_version='3.11')
 @app.function(image=image,gpu='A10',cpu=2,memory=8192,timeout=1300,
               max_containers=1,scaledown_window=2,single_use_containers=True,
               volumes={'/models':weights})
-def qwen_timed_tokens(audio_bytes:bytes):
+def qwen_timed_tokens(audio_bytes:bytes, chunk_seconds:int=30):
     import os,subprocess,tempfile,time
     import numpy as np
     import soundfile as sf
     import torch
     from qwen_asr import Qwen3ASRModel
     from qwen_asr.inference.utils import split_audio_into_chunks
+    if chunk_seconds not in (15,30):
+        raise ValueError('Research chunk_seconds must be 15 or 30')
     if len(audio_bytes)>25*1024*1024:
         raise ValueError('Oversized research-only audio')
     if not torch.cuda.is_available():
@@ -45,7 +47,7 @@ def qwen_timed_tokens(audio_bytes:bytes):
             raise ValueError('Audio must be 5s–15min mono for isolated research')
         duration=float(len(audio)/sr)
         chunks=split_audio_into_chunks(np.asarray(audio,dtype=np.float32),
-                                       sr=16000,max_chunk_sec=30.0)
+                                       sr=16000,max_chunk_sec=float(chunk_seconds))
         if not 1<=len(chunks)<=40:
             raise ValueError('Invalid chunk count')
         start=time.perf_counter()
@@ -80,15 +82,16 @@ def qwen_timed_tokens(audio_bytes:bytes):
         return {'duration_seconds':duration,'chunks':output,
                 'model':'Qwen/Qwen3-ASR-1.7B','aligner':'Qwen/Qwen3-ForcedAligner-0.6B',
                 'qwen_model_load_seconds':load_seconds,
+                'chunk_seconds':chunk_seconds,
                 'qwen_alignment_inference_seconds':inference_seconds,
                 'text_integrity':quality,
                 'note':'not approved for beta app; public noncommercial evaluation only'}
 
 
 @app.local_entrypoint()
-def main(audio:str,output:str='local_runs/qwen-private-tokens.json'):
+def main(audio:str,output:str='local_runs/qwen-private-tokens.json',chunk_seconds:int=30):
     import json
-    result=qwen_timed_tokens.remote(Path(audio).read_bytes())
+    result=qwen_timed_tokens.remote(Path(audio).read_bytes(),chunk_seconds)
     target=Path(output)
     target.parent.mkdir(parents=True,exist_ok=True)
     target.write_text(json.dumps(result,ensure_ascii=False),encoding='utf-8')

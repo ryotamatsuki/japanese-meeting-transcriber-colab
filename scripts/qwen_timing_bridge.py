@@ -76,9 +76,36 @@ def attribute_qwen(chunks: list[dict], diarization: list[dict], duration: float)
     utterances,speaker_map,words=assign_and_group(asr_segments,diarization,True)
     if words != integrity['aligned_tokens']:
         raise ValueError("Word attribution omitted aligned tokens")
-    whole=normalized_ja(''.join(x['text'] for x in utterances))
     expected=normalized_ja(''.join(x['text'] for x in chunks))
+    whole=normalized_ja(''.join(x['text'] for x in utterances))
+    repairs=0
     if whole != expected:
+        # The existing editor sorts words by inferred onset. Forced-aligned
+        # adjacent chunk boundaries sometimes overlap slightly; reordering
+        # those words changes the original ASR lexical sequence.
+        # Only small <=0.8s inversions can be stabilized. Never alter text.
+        previous=-1.0
+        for segment in asr_segments:
+            for item in segment['words']:
+                onset=item['start']
+                if onset <= previous:
+                    adjusted=round(previous+0.001,3)
+                    if adjusted-onset > 0.8 or adjusted >= duration:
+                        raise ValueError("Forced-alignment times cannot be stabilized safely")
+                    item['start']=adjusted
+                    item['end']=round(max(item['end'],adjusted+0.001),3)
+                    if item['end']>duration:
+                        raise ValueError("Stabilization exceeds audio duration")
+                    repairs+=1
+                previous=item['start']
+            segment['start']=segment['words'][0]['start']
+            segment['end']=max(item['end'] for item in segment['words'])
+        if not repairs:
+            raise ValueError("Speaker assignment changed or deleted normalized Qwen text")
+        utterances,speaker_map,words=assign_and_group(asr_segments,diarization,True)
+        whole=normalized_ja(''.join(x['text'] for x in utterances))
+    if whole != expected or words != integrity['aligned_tokens']:
         raise ValueError("Speaker assignment changed or deleted normalized Qwen text")
     return utterances, {**integrity,'utterance_count':len(utterances),
-        'speaker_count':len(speaker_map),'all_normalized_text_preserved':True}
+        'speaker_count':len(speaker_map),'all_normalized_text_preserved':True,
+        'small_temporal_order_repairs':repairs}

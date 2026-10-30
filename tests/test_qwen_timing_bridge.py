@@ -46,6 +46,29 @@ class QwenTimingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             qwen_segments(data,6)
 
+    def test_limited_cross_chunk_time_overlap_keeps_original_text_order(self):
+        data=sample()
+        data[0]['items'][1]['start_time']=3.2
+        data[0]['items'][1]['end_time']=3.4
+        data[1]['items'][0]['start_time']=0.0
+        diar=[{'start':0,'end':3.0,'speaker_id':'A'},
+              {'start':3.0,'end':6.0,'speaker_id':'B'}]
+        rows,quality=attribute_qwen(data,diar,6)
+        self.assertTrue(quality['all_normalized_text_preserved'])
+        self.assertGreater(quality['small_temporal_order_repairs'],0)
+        self.assertEqual(''.join(x['text'] for x in rows),
+                         'こんにちははいありがとうございます')
+
+    def test_large_time_inversion_rejected(self):
+        data=sample()
+        data[0]['items'][1]['start_time']=3.2
+        data[0]['items'][1]['end_time']=3.4
+        data[1]['items'][0]['start_time']=0.0
+        # Should be normalized for source text but refuse far timestamps.
+        data[1]['items'][0]['start_time']=-1.0
+        with self.assertRaises(ValueError):
+            attribute_qwen(data,[{'start':0,'end':6,'speaker_id':'A'}],6)
+
     def test_rejects_unknown_speaker_model(self):
         with self.assertRaises(ValueError):
             attribute_qwen(sample(),[],6)
