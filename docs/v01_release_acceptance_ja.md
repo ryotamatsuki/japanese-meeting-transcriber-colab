@@ -171,3 +171,12 @@ modal deploy beta_modal.py
 - Qwenは**次の統合検証の優先候補**。ただしQwen出力の単語時刻・Community-1話者帰属・最終話者付きcpCER・60分Web E2E・費用・24時間自動削除・編集時間短縮は未検証。**ベータ既定をQwenに切替えず、リリース判定No-Goを維持**。
 - Stage9 SepFormer（英語WSJ向け）は短い重複発話2例で改善1件・変化なし1件。元の独立話者音声オラクルとは区別し、自動適用しない。
 - [Stage9・10の最終10録音検証と結論](v01_stage9_10_final_report_20261030.md)。
+
+## Stage 11 移行中：Qwen時刻・話者統合と60分編集保存の防御的改善（2026-10-30）
+
+- [Qwen3-ASRとQwen3-ForcedAlignerの公式コード](https://github.com/QwenLM/Qwen3-ASR)に基づく、日本語強制アラインメント→発言時刻→Community-1排他的話者ID統合の**研究用GPUコード**を追加した。入力は非商用IngCrowd 2話者01/05、最初の2録音探索のみ。公式日本語対応aligner `Qwen/Qwen3-ForcedAligner-0.6B` を利用。
+- `scripts/qwen_timing_bridge.py`は、Qwenの日本語全文と単語時刻の正規化全文一致・録音末尾カバレッジ・時刻の有効性・話者帰属後の全文保持を検証し、破れた場合は失敗扱い。研究用の単体テストはCI PASS。**本番`beta_modal.py`のWhisperをQwenへ切替えない。**
+- [強制アラインメント＋Community-1 実GPU評価 Run 41068300913](https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41068300913)。同時点で実行中。初回Run 41067219122はGPUコンテナの研究モジュール不足で2件失敗しており**GitHub Actions全体のsuccessと区別**。修正後の2件のcpCER実測完了まで候補は未認定。
+- Stage11の予備監査で`parse_original_archive`に、ミリ秒より短いSRT区間の時刻丸めが`start==end`を作り、編集APIの`normalize_edits`へ渡すと保存拒否され得る経路を特定。モデル出力由来で丸めが等しくなる場合に限り、終端を0.001秒延長する防御的修正を実装。実際のユーザーが指定したゼロ長・逆転時刻は依然拒否する。
+- `tests/test_beta_srt_rounding.py`では1200発言のSRTを生成して丸めによる短区間を再現し、保存前の正規化が成功することを確認。CI PASS。**過去の60分実GPU保存失敗が同じ理由だったという証拠はないため根本原因の確定・本番再試験合格は未達**。
+- 完全なStage11の受入には、60分Web E2E連続試験（異なる音声含む）、ジョブ失敗回復、24時間実体削除、費用上限の監査が必要。**Release No-Go・Draft PR継続**。
