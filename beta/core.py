@@ -151,5 +151,17 @@ def parse_original_archive(data: bytes):
                 parsed.append({'start':from_ts(timing[0]),'end':from_ts(timing[1]),
                                'speaker':who,'text':text})
             if len(parsed)==len(rows):
+                # SRT timestamps have only millisecond resolution. Very short
+                # model-generated spans can round to the same millisecond even
+                # though the underlying timestamps were strictly increasing.
+                # A zero-length row cannot be saved by normalize_edits.
+                # Repair equality *only*; do not mask reversed or bad times.
+                repaired=0
+                for row in parsed:
+                    if row['start']==row['end']:
+                        row['end']=round(row['start']+0.001,3)
+                        repaired+=1
+                if repaired:
+                    report['rounded_srt_zero_duration_repairs']=repaired
                 rows=parsed
         return {'rows':rows, 'report':report}
