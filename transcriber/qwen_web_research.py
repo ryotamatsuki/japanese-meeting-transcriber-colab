@@ -15,6 +15,13 @@ from .files import safe_name, sha256_file
 from .exporters import export
 
 
+def speaker_labels(intervals):
+    """Match assign_and_group first-appearance order without string indexing."""
+    names=dict.fromkeys(seg['speaker_id'] for seg in
+                        sorted(intervals,key=lambda row:(row['start'],row['end'])))
+    return {sid:f'話者{i+1}' for i,sid in enumerate(names)}
+
+
 def transcribe_qwen_research(path, output_root, model_cache, config, token, progress=None):
     progress=progress or (lambda phase: None)
     progress('starting')
@@ -110,8 +117,7 @@ def transcribe_qwen_research(path, output_root, model_cache, config, token, prog
     progress('speaker_attribution')
     rows,quality=attribute_qwen(chunks,job['diar_segments'],duration)
     count=quality['aligned_tokens']
-    speaker_map={seg['speaker_id']:f'話者{i+1}' for i,seg in enumerate(
-        {seg['speaker_id']:None for seg in job['diar_segments']})}
+    speaker_map=speaker_labels(job['diar_segments'])
     metrics['attribution_repairs']=quality.get('small_temporal_order_repairs',0)
     del chunks
     job['utterances'],job['speaker_map'],job['word_count']=rows,speaker_map,count

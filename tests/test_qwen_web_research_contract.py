@@ -11,6 +11,7 @@ from beta.core import parse_original_archive, normalize_edits, build_export
 from scripts.qwen_timing_bridge import attribute_qwen
 from transcriber.exporters import export
 from transcriber.processor import Config
+from transcriber.qwen_web_research import speaker_labels
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -26,6 +27,13 @@ class QwenWebResearchContract(unittest.TestCase):
         self.assertIn("process(audio,Path(tmp)/'results'",baseline)
         self.assertIn("quality_experiment=False",baseline)
         self.assertNotIn('modal.asgi_app()', (ROOT/'transcriber/qwen_web_research.py').read_text())
+
+    def test_speaker_labels_follow_first_onset_order(self):
+        diar=[{'speaker_id':'SPEAKER_B','start':1,'end':2},
+              {'speaker_id':'SPEAKER_A','start':0,'end':1},
+              {'speaker_id':'SPEAKER_B','start':2,'end':3}]
+        self.assertEqual(speaker_labels(diar),
+                         {'SPEAKER_A':'話者1','SPEAKER_B':'話者2'})
 
     def test_qwen_research_export_roundtrip(self):
         chunks=[
