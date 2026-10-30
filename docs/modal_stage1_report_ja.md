@@ -1,6 +1,8 @@
 # Japanese Meeting Transcriber — Stage 1 実装・検証報告
 
-検証日：2026-10-29（日本時間）。**判定：Stage 1未完了。Modal上の実GPU推論は未検証。**
+検証日：2026-10-29〜30（日本時間）。**判定：Stage 1未完了。L4実診断はPASS。両モデルの実推論は未完了。**
+
+> 最新状態は末尾「2026-10-30 Actions実検証」を参照。以下の2026-10-29時点の表は初回検証履歴。
 基準main：`84628cdc6f31e0a811d7bdbc0348347bf88fe7f7`。
 作業ブランチ：`feature/modal-gpu-inference-poc`。mainへ直接コミット・マージしない。
 
@@ -64,7 +66,7 @@
 | pyannote.audio | 4.0.7 |
 | PyAV | 18.1.0 |
 | soundfile | 0.13.1 |
-| TorchCodec | 0.8.1+cu128（torch2.9対応） |
+| TorchCodec | 0.8.1（公式CPU音声デコーダwheel、torch2.9対応。推論はL4） |
 | huggingface-hub | 0.36.0 |
 | Modal CLI | 1.4.3（ローカルでversion確認済み） |
 | CPU / メモリ | 2物理コア / 8 GiB |
@@ -222,3 +224,76 @@ Modal App/Function/Containerの実行識別子、GPU実行ログ、実出力ZIP�
    本実行環境のネットワーク制限はHF Secret登録だけでは解消しない。
 4. setupのTest 1をまず実行し、成功してから権利関係の明確な日本語2話者音声でTest 2〜6へ進む。
    本回は音声準備・転送・実推論まで進んでいない。
+
+
+## 2026-10-30 Actions実検証（更新時点）
+
+### 実行経路と修正
+
+本人がWorkのクラウドブラウザでModalへログインしたことを、
+`ryota-matsuki / main`のApps画面で確認した。
+国文祭PoCで使用したGitHub Actions Environment Secretsが現存することも確認した。
+文字起こし側にはSecretsがないため、国文祭リポジトリの隔離ブランチ
+`eval/meeting-transcriber-stage1-20261030`で検証workflowを実行した。
+Secrets値は取得・コピー・表示していない。国文祭main・稼働Appは変更していない。
+
+1. Actions run `40998500388`：Modal接続・認証成功。
+   未使用の話者分離FunctionのSecretまで解決されるため、GPU診断で停止。
+   GPU/ASR/OFF用AppとSecretを使う話者分離Appを分離して修正。
+   修正コミット `cd6636cb8056e4fa3e98c4f3061e00c45a0e793c`。
+2. Actions run `40998805817`：依存インストールとpip check成功。
+   CUDA版TorchCodecの共有ライブラリimportでビルド失敗。
+   公式CPU音声デコーダwheelをURL・SHA256固定。モデルの推論はCUDAのまま維持。
+   元CUDA wheelのreadelfでlibnppicc.so.12等の依存も確認。
+3. Actions run `40999313679`：上記修正後、Test 1成功。Test 2を順次実行中。
+   検証元コミット `b7bf442ea57d8f3cd7a41e4a8ee31796d56144c1`。
+   同コミットの既存CI run `40999216987`も成功。
+
+### Test状況
+
+| Test | 状況 | 証拠・制限 |
+|---|---|---|
+| 1 L4/CUDA/import | PASS | ActionsのTest 1 step成功、validate_evidence.pyもPASS。L4識別、CUDAテンソル演算、CTranslate2 CUDA、全importを実行 |
+| 2 large-v3 ASR | 進行中 | 別L4コンテナの割当待ち。推論成功とは扱わない |
+| 3 Community-1 | 未実施 | transcriber-hfの本人入力・モデルアクセス権確認待ち |
+| 4 統合 | 未実施 | Test 3未完了 |
+| 5 OFF | 未実施 | 起動時Secret依存は修正。実音声のOFF統合は未実施 |
+| 6 モデル/結果キャッシュ | 未実施 | 実GPU再推論未実施 |
+
+Test 1 Modal App：`ap-ixJoxZE95dtW7KuGmItKmy`。
+GPU診断Function：`fu-CSAuQslqKFgSr7SeOtfxCO`。
+Test 2 Modal App：`ap-PBLmIpjIwEOxnUT3r1FYfN`。
+ASR Function：`fu-uYLGsE4rBka7qXpeqN3BGH`。
+
+Test 2ログで12:53:01及び12:53:49（JST）に、GPU_L4 workerの割当待ちを確認。
+この待ち時間をモデルロード・推論時間・請求対象時間として計上しない。
+更新時点ではASR JSON・ZIP・性能の実測値はまだ未取得。
+診断evidenceとログはworkflow終了時にActions artifactへ保存される設定。
+
+### テスト音声・予算
+
+国立国語研究所「方言録音資料シリーズ11 京都市方言」のWikimedia公開音声。
+原公開元でシリーズ3〜15の音声にCC BY 4.0が付されていることを確認。
+長さ34.579375秒、SHA256
+`9f6a382ddeffc9e74d9a94954b66c6ed43ae3a3ae1d2fede03747845c2e10124`。
+`scripts/prepare_validation_audio.py`で取得・照合・出典記録を行う。
+音声・推論結果はGitHubにコミットしていない。
+古い京都方言の2話者会話であり、一般的な会議音声の精度認証ではない。
+
+実行前の残クレジット$30.00、実行中の表示$29.99。
+表示はWorkspace全体の丸め値であり、単一テスト費用の実測ではない。
+課金設定・利用上限の変更は行っていない。
+公式料金は2026-10-30にもL4 $0.000222/秒、CPU $0.0000131/コア秒、
+メモリ $0.00000222/GiB秒を確認した。
+ASR/話者分離の費用・性能は、実測秒数取得後に算出する。
+
+### 本人操作が必要な残項目
+
+WorkのModal Secret作成画面に`transcriber-hf`、`HF_TOKEN`まで入力済み。
+Valueは空欄、未送信。本人がReadトークンを直接入力しDoneを実施する。
+Community-1のモデルアクセス条件は、トークンを発行したHFアカウントで確認する。
+CLI認証は既存Actions経由で成立しており、本人PCでのModal CLI操作は不要。
+
+実行ログ：https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/40999313679
+Test 1：https://modal.com/apps/ryota-matsuki/main/ap-ixJoxZE95dtW7KuGmItKmy
+Test 2：https://modal.com/apps/ryota-matsuki/main/ap-PBLmIpjIwEOxnUT3r1FYfN

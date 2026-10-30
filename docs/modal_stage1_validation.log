@@ -40,3 +40,21 @@ HTTPS API root: HTTP 415; Modal website: HTTP 200 (not gRPC success)
 GPU build/run: NOT STARTED. Tests 1-6: NOT EXECUTED.
 No execution IDs, GPU outputs, timing or billing evidence produced.
 No billing settings changed; no credentials/audio/results committed.
+
+=== 2026-10-30 Actions continuation (sanitized) ===
+Cloud browser: Modal signed in, ryota-matsuki / main.
+Existing Modal credentials found by NAME ONLY in cultural bot GitHub Environment.
+No values extracted/copied; isolated runner branch used, no production deploy.
+Actions 40998500388: authenticated, failed on unused Function transcriber-hf Secret.
+Fix: separate default and diarization Apps; commit cd6636c.
+Actions 40998805817: install + pip check PASS, torchcodec CUDA import FAIL.
+Fix: official torchcodec 0.8.1 CPU audio-decoder wheel, URL + SHA256 pin.
+Both neural model definitions remain CUDA/L4, no CPU model fallback.
+Local regression: notebook check + 17 unittest PASS.
+Implementation commit b7bf442; CI 40999216987 PASS.
+Actions 40999313679: Test 1 PASS, validate_evidence --stage gpu PASS.
+Test 1 App ap-ixJoxZE95dtW7KuGmItKmy; Function fu-CSAuQslqKFgSr7SeOtfxCO.
+Test 2 App ap-PBLmIpjIwEOxnUT3r1FYfN; Function fu-uYLGsE4rBka7qXpeqN3BGH.
+Test 2: queued for GPU_L4 capacity as of 12:53:49 JST, not inference success.
+Licensed Japanese two-speaker source prepared, 34.579375 seconds.
+Test 3-6 remain pending. Secret form prepared, value empty and not submitted.
