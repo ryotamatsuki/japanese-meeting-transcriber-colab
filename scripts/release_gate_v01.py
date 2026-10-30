@@ -45,13 +45,21 @@ def audit(evidence):
           'Qwen short authenticated Web E2E not verified')
 
     longform=qwen_web.get('longform') or {}
-    check('qwen_60min_distinct_inputs',
+    source_ids=longform.get('source_ids')
+    check('qwen_60min_web_e2e',
           type(longform.get('independent_recordings')) is int
           and longform['independent_recordings']>=2
-          and longform.get('human_check_final_minute') is True
+          and isinstance(source_ids,list)
+          and len(source_ids)>=2 and all(isinstance(s,str) and s for s in source_ids)
+          and len(set(source_ids))>=2
           and longform.get('edit_export_delete_verified') is True
           and longform.get('fresh_runs_pass') is True,
-          'Qwen 60-minute Web E2E not reproduced on two distinct approved recordings')
+          'Qwen 60-minute Web E2E not reproduced with two distinct authorized audio sources')
+    # A synthetic repeat stress test may pass the E2E gate without human
+    # listening; preserve the listening requirement as a separate mandatory gate.
+    check('qwen_60min_human_tail_review',
+          longform.get('human_check_final_minute') is True,
+          'No verified human listening of the final minute on 60-minute recordings')
 
     quality=evidence.get('quality') or {}
     check('japanese_cer_target',

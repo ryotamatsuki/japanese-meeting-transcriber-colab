@@ -12,7 +12,7 @@ def synthetic_all_pass():
       'qwen_web':{
           'short_run_id':41079582347,'short_web_e2e_success':True,
           'short_explicit_deletion_verified':True,
-          'longform':{'independent_recordings':2,'human_check_final_minute':True,
+          'longform':{'independent_recordings':2,'source_ids':['ingcrowd01','ingcrowd05'],'human_check_final_minute':True,
                       'edit_export_delete_verified':True,'fresh_runs_pass':True}},
       'quality':{
           'human_reference_cer_median_percent':14.9,
@@ -51,7 +51,22 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertEqual(r['release_status'],'NO_GO')
         self.assertFalse(r['checks']['japanese_cer_target'])
         self.assertFalse(r['checks']['human_time_saving'])
-        self.assertFalse(r['checks']['qwen_60min_distinct_inputs'])
+        self.assertFalse(r['checks']['qwen_60min_web_e2e'])
+        self.assertFalse(r['checks']['qwen_60min_human_tail_review'])
+
+    def test_synthetic_two_source_60m_passes_web_but_not_human_listening(self):
+        e=synthetic_all_pass()
+        e['qwen_web']['longform']['human_check_final_minute']=False
+        r=audit(e)
+        self.assertTrue(r['checks']['qwen_60min_web_e2e'])
+        self.assertFalse(r['checks']['qwen_60min_human_tail_review'])
+        self.assertEqual(r['release_status'],'NO_GO')
+
+    def test_two_repetitions_of_same_source_do_not_count_as_independent(self):
+        e=synthetic_all_pass()
+        e['qwen_web']['longform']['source_ids']=['ingcrowd01','ingcrowd01']
+        r=audit(e)
+        self.assertFalse(r['checks']['qwen_60min_web_e2e'])
 
     def test_3_speaker_only_cannot_pass_as_4_speaker(self):
         e=synthetic_all_pass()
