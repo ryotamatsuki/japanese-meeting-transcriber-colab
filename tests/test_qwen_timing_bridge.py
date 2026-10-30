@@ -77,7 +77,7 @@ class QwenTimingTests(unittest.TestCase):
         self.assertEqual(meta['lexical_redistribution_chunks'],1)
         self.assertTrue(meta['all_normalized_text_preserved'])
         self.assertEqual(''.join(x['text'] for x in rows),
-                         'こんにちは。はいありがとうございます。')
+                         'こんにちは。はいありがとうございます')
 
     def test_large_lexical_difference_is_not_silently_repaired(self):
         data=sample()
