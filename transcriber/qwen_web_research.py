@@ -78,19 +78,17 @@ def transcribe_qwen_research(path, output_root, model_cache, config, token, prog
     metrics['qwen_load_seconds']=time.perf_counter()-t
     t=time.perf_counter()
     progress('infer_qwen')
+    from scripts.qwen_chunk_retry import infer_chunk
     chunks=[]
+    retry_events=0
     for waveform,offset in audio_chunks:
-        one=model.transcribe(
-            audio=(np.asarray(waveform,dtype=np.float32),16000),
-            language='Japanese',return_time_stamps=True)
-        if len(one)!=1 or (one[0].text.strip() and not getattr(one[0].time_stamps,'items',None)):
-            raise ValueError('Missing Qwen aligned text')
-        aligned=one[0].time_stamps
-        tokens=[{'text':word.text,'start_time':float(word.start_time),
-                 'end_time':float(word.end_time)}
-                for word in (aligned.items if aligned is not None else [])]
-        chunks.append({'offset_sec':float(offset),'duration_sec':len(waveform)/sr,
-                       'text':one[0].text,'items':tokens})
+        aligned,meta=infer_chunk(model,np.asarray(waveform,dtype=np.float32),
+                                 float(offset),sample_rate=sr,max_retries=2)
+        chunks.extend(aligned)
+        retry_events+=meta['retries']
+        if len(chunks)>240:
+            raise ValueError('Maximum aligned chunk count exceeded after retries')
+    metrics['bounded_qwen_alignment_retries']=retry_events
     metrics['qwen_inference_seconds']=time.perf_counter()-t
     progress('align_validate')
     job['asr_segments'],integrity=qwen_segments(chunks,duration)
