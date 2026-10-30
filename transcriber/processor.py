@@ -17,6 +17,8 @@ class Config:
     expected_speakers: int = 0
     min_speakers: int = 0
     max_speakers: int = 0
+    quality_experiment: bool = False
+    speaker_cleanup_ms: int = 0
 
     def __post_init__(self):
         counts = (self.expected_speakers, self.min_speakers, self.max_speakers)
@@ -24,6 +26,14 @@ class Config:
             raise ValueError('話者数は0以上の整数で指定してください。')
         if self.min_speakers and self.max_speakers and self.min_speakers > self.max_speakers:
             raise ValueError('MIN_SPEAKERSはMAX_SPEAKERS以下にしてください。')
+        if type(self.quality_experiment) is not bool:
+            raise ValueError('quality_experiment must be boolean')
+        if type(self.speaker_cleanup_ms) is not int or not 0 <= self.speaker_cleanup_ms <= 300:
+            raise ValueError('speaker_cleanup_ms must be between 0 and 300')
+        if self.speaker_cleanup_ms and not self.quality_experiment:
+            raise ValueError('Experimental cleanup requires quality_experiment=True')
+        if self.speaker_cleanup_ms and not self.enable_diarization:
+            raise ValueError('Cannot clean speaker labels with diarization OFF')
         if self.language not in ('ja', 'auto', 'en'):
             raise ValueError('language must be ja, auto or en')
 
