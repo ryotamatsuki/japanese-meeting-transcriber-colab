@@ -29,8 +29,8 @@ def qwen_timed_tokens(audio_bytes:bytes, chunk_seconds:int=30):
     import torch
     from qwen_asr import Qwen3ASRModel
     from qwen_asr.inference.utils import split_audio_into_chunks
-    if chunk_seconds not in (15,30):
-        raise ValueError('Research chunk_seconds must be 15 or 30')
+    if chunk_seconds not in (10,15,30):
+        raise ValueError('Research chunk_seconds must be 10, 15 or 30')
     if len(audio_bytes)>25*1024*1024:
         raise ValueError('Oversized research-only audio')
     if not torch.cuda.is_available():
@@ -48,7 +48,7 @@ def qwen_timed_tokens(audio_bytes:bytes, chunk_seconds:int=30):
         duration=float(len(audio)/sr)
         chunks=split_audio_into_chunks(np.asarray(audio,dtype=np.float32),
                                        sr=16000,max_chunk_sec=float(chunk_seconds))
-        if not 1<=len(chunks)<=80:
+        if not 1<=len(chunks)<=120:
             # 15-second research fallback needs up to 60 chunks at 15min.
             raise ValueError('Invalid chunk count')
         start=time.perf_counter()

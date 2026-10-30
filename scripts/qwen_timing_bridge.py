@@ -60,6 +60,19 @@ def qwen_segments(chunks: list[dict], duration: float) -> tuple[list[dict],dict]
     if not joined:
         raise ValueError("Qwen produced empty speech for this evaluation")
     if joined != aligned:
+        # Numeric-only diagnostics; never print speech text or aligned tokens.
+        import json
+        mismatch=[]
+        for index, chunk in enumerate(chunks):
+            raw=normalized_ja(str(chunk['text']))
+            timed=normalized_ja(''.join(str(t['text']) for t in (chunk.get('items') or [])))
+            if raw!=timed:
+                mismatch.append({'chunk_index':index,'recognized_characters':len(raw),
+                    'aligned_characters':len(timed),'same_character_count':len(raw)==len(timed)})
+        print('QWEN_ALIGNMENT_NUMERIC_DIAGNOSTIC',json.dumps({
+            'mismatch_chunk_count':len(mismatch),'mismatched_chunks':mismatch[:12],
+            'total_recognized_chars':len(joined),'total_aligned_chars':len(aligned)},
+            ensure_ascii=False),flush=True)
         raise ValueError("Qwen forced alignment did not preserve all normalized speech characters")
     if words_count<4 or maximum < 0.8*duration:
         raise ValueError("Qwen timestamps are missing or do not cover most of recording")
