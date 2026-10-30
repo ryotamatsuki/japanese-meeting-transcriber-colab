@@ -2,7 +2,7 @@
 
 検証日：2026-10-29〜30（日本時間）。**判定：Stage 1未完了。L4実診断とlarge-v3実ASRはPASS。Community-1実推論は未完了。**
 
-> 最新状態は末尾「2026-10-30 Actions実検証」を参照。以下の2026-10-29時点の表は初回検証履歴。
+> 最新状態は末尾「2026-10-30 最終実測追記」を参照。以下の2026-10-29時点の表は初回検証履歴。
 基準main：`84628cdc6f31e0a811d7bdbc0348347bf88fe7f7`。
 作業ブランチ：`feature/modal-gpu-inference-poc`。mainへ直接コミット・マージしない。
 
@@ -287,7 +287,7 @@ Test 2ログで12:53:01及び12:53:49（JST）に、GPU_L4 workerの割当待ち
 メモリ $0.00000222/GiB秒を確認した。
 ASR/話者分離の費用・性能は、実測秒数取得後に算出する。
 
-### 本人操作が必要な残項目
+### 当時の本人操作待ち（以下のHF設定後の追記で解消）
 
 WorkのModal Secret作成画面に`transcriber-hf`、`HF_TOKEN`まで入力済み。
 Valueは空欄、未送信。本人がReadトークンを直接入力しDoneを実施する。
@@ -333,3 +333,78 @@ Test 1 artifact SHA256:
 
 現行run：https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41001086758
 Test 1 artifact：https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/40999313679/artifacts/12952759823
+
+
+### 2026-10-30 最終実測追記
+
+**Stage 1未完了。Test 1・2は実L4でPASS。Community-1はGPU未割当のため推論未実施。**
+
+検証run `41001086758`では、Test 2成功後、Test 3が600秒のクライアント上限で
+exit 124となった。専用AppのModalログは13:18:32までGPU_L4容量待ちを記録。
+13:21:27にclient disconnectedで停止し、live container / running callとも0を確認した。
+モデルロード開始、HF認可成功、GPU転送、exclusive出力を示す証拠はない。
+HF Secretの作成は確認済みだが、Community-1利用条件の同意・Read権限の有効性は未検証。
+Test 4・6は依存するTest 3の未成立により未実施。統合成功とは扱わない。
+
+#### Test 2の出力・実測
+
+- App：`ap-oku3npcbfnF7rNepLaImgS`、Function：`fu-FNyuLwgDozCx6sHyhVd7su`。
+- 入力34.579375秒。large-v3 / faster-whisper 1.2.1 / CUDA float16、言語ja。
+- ZIP内 `whisper_asr.json` はUTF-8で読め、13セグメント・184単語、非空の日本語出力。
+  セグメントの開始時刻順と、全単語の0以上・開始<=終了・音声長内を確認した。
+  ASR出力範囲1.18〜34.18秒。語のゼロ長区間はWhisperの出力として許容する。
+- `validate_evidence.py --stage asr`、`validate_run.py --stage asr`を
+  Actionsと取得後のローカルで実行しPASS。精度の合格判定・会議音声品質の保証ではない。
+- モデルロード30.950656724秒（初回取得を含み得る）、ASR推論6.058045705秒。
+  ASR RTF 0.1751924581、音声長/推論時間5.708008273倍。
+- pipeline 37.421000727秒、remote_function 61.841951989秒。
+  GPUメモリのサンプル最大4214 MiB、サンプリングエラー0。厳密な瞬間ピークではない。
+- Modal画面：13:07:20 enqueue、13:07:33 started、Startup 7.49秒、
+  Execution表示1m 1s、Succeeded。client_wall 75.823667645秒を起動・請求時間と同一視しない。
+- このrunのevidenceは修正前のtiming_noteを含むため、その注記は不正確。
+  時計自体はlocal_entrypoint内で、CLI初期化・事前イメージビルドを含まない。
+  後続コミット37071dbで注記のみ修正し、取得した証拠ファイルは改変していない。
+
+公式 https://modal.com/pricing （2026-10-30確認）のL4、2 CPU、8 GiB単価合計は
+$0.00026596/秒。remote_function実測のみでは約$0.01645、
+これに観測Startup 7.49秒を加えた限定的概算は約$0.01844。
+モデル取得・診断を含むこの短いASR実行の概算であり、定常ASR単価ではない。
+終了処理・イメージビルド・ストレージ・丸め・無料枠を含む請求額の確定値ではない。
+Modal App overviewのusage表示は$0.02、Workspace残クレジット表示は$29.96。
+後者はWorkspace全体の表示でテスト固有の請求額ではない。
+
+証拠：Actions artifact `12953802803`（run `41001086758`、7日保存設定）。
+SHA256 `ce6e4a92a8916507bc7e8e365067b5ca5ec4e4f4c61204c53335ab234a766936`。
+内容は `02-asr/evidence.json`、`02-asr/run-1.zip`、ASR/話者分離ログ、音声出典。
+取得・ZIPハッシュ照合を実施した。音声・認識JSON・ZIP・認証値はGitHubへコミットしない。
+
+#### Test 5・最終状態
+
+Test 5を依存するTest 3と切り離してrun `41002514566`で実行した。
+App `ap-iOSdjxhqlw0nM5NSNUVb5m` / Function `fu-XNEAfa4KGmMfssSVZEM5ff`。
+起動時に作成したFunctionはgpu_checkとasr_onlyだけで、HF Secretを参照しない経路。
+ただし13:23:30（JST）のModalログはL4割当待ちで、180秒上限によりexit 124。
+OFF時の出力完走は未検証でありPASSとはしない。
+artifact `12954326457`（ログ・出典のみ、認識出力なし）のSHA256は
+`4a5344c2707d87663d1d8f877bdd00bfedc574e62fc74c6da89e3cd320cf1cfe`。
+
+| Test | 最終判定 | 確認範囲 |
+|---|---|---|
+| 1 L4起動・CUDA演算・import | PASS | 実L4と証拠を確認 |
+| 2 Whisper単独 | PASS | large-v3実ASR・単語時刻・JSON |
+| 3 Community-1単独 | FAIL（実行試行）／推論未実施 | L4割当待ち600秒でtimeout。HF認可・GPU転送・話者精度は未検証 |
+| 4 統合 | 未実施 | Community-1・話者ラベル付き出力は未確認 |
+| 5 話者分離OFF | FAIL（実行試行）／推論未実施 | Secret不要のApp起動のみ確認。L4待ち180秒でtimeout |
+| 6 モデル重み・結果JSONキャッシュ | 未実施 | snapshot保存は確認したがオフライン再推論・結果再利用効果は未確認 |
+
+再開時は既存Secretを維持したまま、L4容量が利用できる時にTest 3を実行する。
+403等のモデル認可エラーが出た場合にだけ、本人がHFアカウントでCommunity-1条件への
+同意・トークンRead権限を確認する。現時点で追加トークン入力や本人PC操作は不要。
+Test 3成功後、Test 4と6を行い、実際の話者切替えと照合する。
+Test 5も独立して再実行する。地域固定・他GPU・他モデル・CPU推論へは変更していない。
+残りを全て満たすまでStage 1完了としない。
+
+実行run：https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41001086758
+OFF run：https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41002514566
+ASR artifact：https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41001086758/artifacts/12953802803
+OFF artifact：https://github.com/ryotamatsuki/ehime-kokubunsai-ai-poc/actions/runs/41002514566/artifacts/12954326457

@@ -69,3 +69,25 @@ Run 41001086758: Test 2 PASS including Japanese/words/ZIP/evidence validation.
 Test 2 App ap-oku3npcbfnF7rNepLaImgS.
 Test 3 App ap-gTQ5or6dldrqH1M5qpl1Xx; waiting on GPU_L4 capacity.
 Timing note corrected: local_entrypoint clock excludes earlier setup/image build.
+
+2026-10-30 real Modal validation, final ASR evidence:
+run=41001086758, source=f7aa4367080c247b20a2cdf0b932603d1b33a262
+Test2 PASS app=ap-oku3npcbfnF7rNepLaImgS function=fu-FNyuLwgDozCx6sHyhVd7su
+NVIDIA L4; large-v3; faster-whisper 1.2.1; CUDA float16
+ASR load=30.950656724s inference=6.058045705s audio=34.579375s sampled_gpu=4214MiB
+13 segments / 184 words; UTF-8 JSON and timestamps checked; local validators PASS
+Modal UI: Startup=7.49s Execution=1m1s Succeeded; app usage=$0.02 rounded
+Test3 attempted: app=ap-gTQ5or6dldrqH1M5qpl1Xx function=fu-rPToc1Hlm40cyYDxmyKY6Z
+GPU_L4 worker capacity unavailable before inference; client timeout=600s exit=124
+App stopped after local client disconnected; 0 live containers / 0 running calls
+Test4 and Test6 skipped; Community-1 model access/accuracy unverified
+Artifact=12953802803 SHA256=ce6e4a92a8916507bc7e8e365067b5ca5ec4e4f4c61204c53335ab234a766936
+Raw evidence retained locally, not committed. Stage1 incomplete.
+
+Independent Test5 run=41002514566 source=37071dbb3197dae59b37fccfab034242a256c977
+app=ap-iOSdjxhqlw0nM5NSNUVb5m function=fu-XNEAfa4KGmMfssSVZEM5ff
+HF Secret-free app created; GPU_L4 capacity wait; timeout=180s exit=124
+No output ZIP/evidence; Test5 is NOT PASS
+Artifact=12954326457 SHA256=4a5344c2707d87663d1d8f877bdd00bfedc574e62fc74c6da89e3cd320cf1cfe
+Test1 PASS, Test2 PASS, Test3 attempt FAIL (inference not run), Test4 not run,
+Test5 attempt FAIL (inference not run), Test6 not run. Stage1 incomplete.

@@ -227,3 +227,19 @@ TorchCodec 0.8.1は公式CPU wheelのURLとSHA256で固定する。
 音声デコードはCPUで行い、Whisper large-v3とCommunity-1の推論は従来どおりL4上で行う。
 モデルのCPUフォールバック・変更・量子化ではない。
 変更後も実ビルドとGPU診断を通るまでは依存環境を認定しない。
+
+
+### L4容量待ちでの中断と再開（2026-10-30）
+
+実ビルド・L4診断・large-v3単独推論は成功したが、Community-1とOFFは
+L4 worker割当待ちでクライアントtimeoutになった。認可エラーとは区別する。
+長時間の無制限再試行は避け、GNU timeoutで600秒などの上限を設ける。
+結果をalways artifactで保存し、Modal側にもlive / pendingの処理が残らないことを確認する。
+待機をモデルロード・純粋起動時間・請求時間に加算しない。
+
+現在のtranscriber-hf Secretを作り直す必要はない。
+L4容量が戻ったらTest 3、Test 4、Test 5、Test 6を実行する。
+モデル取得で403等が出た場合だけ、本人がCommunity-1条件・Read権限を確認する。
+モデルsnapshotの存在だけを重み再利用成功とせず、既存のオフライン再ロード経路で
+実推論して確認する。JSONキャッシュの再利用とは別に計測する。
+独立OFF検証runnerの記録はmodal_validation_off_runner.ymlを参照。
