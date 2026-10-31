@@ -61,21 +61,29 @@ def audio_features(pcm, sample_rate, rows, candidates):
     """
     if sample_rate != 16000:
         raise ValueError("PCM must be explicitly resampled to 16kHz mono")
-    import numpy as np
-    samples = np.asarray(pcm, dtype=np.float32)
-    if samples.ndim != 1 or samples.size == 0 or not np.isfinite(samples).all():
+    # Standard-library implementation, compatible with numpy 1-D arrays but
+    # also usable in the dependency-light CI without installing numpy.
+    try:
+        n = len(pcm)
+        dims = len(pcm.shape) if hasattr(pcm, "shape") else 1
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise ValueError("Invalid audio buffer") from exc
+    if dims != 1 or not 0 < n / sample_rate <= 3600.5:
         raise ValueError("Invalid mono waveform")
-    if not 0 < samples.size / sample_rate <= 3600.5:
-        raise ValueError("Invalid audio duration")
-    max_seconds = samples.size / sample_rate
+    max_seconds = n / sample_rate
 
     def rms(left, right):
-        a = max(0, min(samples.size, int(round(left * sample_rate))))
-        b = max(0, min(samples.size, int(round(right * sample_rate))))
+        a = max(0, min(n, int(round(left * sample_rate))))
+        b = max(0, min(n, int(round(right * sample_rate))))
         if b <= a:
             return None
-        chunk = samples[a:b].astype(np.float64)
-        return float(np.sqrt(np.mean(chunk * chunk) + 1e-12))
+        total = 0.0
+        for value in pcm[a:b]:
+            v = float(value)
+            if not math.isfinite(v):
+                raise ValueError("Nonfinite audio")
+            total += v * v
+        return math.sqrt(total / (b-a) + 1e-12)
 
     features = {}
     for i in candidates:
