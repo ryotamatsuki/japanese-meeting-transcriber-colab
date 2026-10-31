@@ -43,3 +43,8 @@ models/
 whisper_asr*.json
 pyannote_*.json
 *_metrics.json
+
+# Stage37 React frontend artifacts
+/frontend/node_modules/
+/beta/react_dist/
+/frontend/dist/

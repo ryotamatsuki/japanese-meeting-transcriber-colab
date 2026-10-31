@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Kiroku · プライベートログイン</title><link rel="stylesheet" href="/login.css"/></head>
+<body><main class="login-layout">
+  <section class="login-cover">
+    <div class="cover-brand"><span class="cover-logo" aria-hidden="true">≈</span><strong>Kiroku<span>.</span></strong></div>
+    <div class="cover-copy"><span class="eyebrow">MEETING INTELLIGENCE</span>
+      <h1>会議の記録を、<br/>もっとスマートに。</h1>
+      <p>音声の文字起こしから編集、保存まで。<br/>一つのワークスペースに。</p></div>
+    <div class="cover-foot">PRIVATE ALPHA  •  v0.1</div>
+  </section>
+  <section class="login-side"><div class="login-card">
+    <div class="mini-brand">Kiroku<span>.</span></div>
+    <div class="lock-icon" aria-hidden="true">●</div>
+    <h2>おかえりなさい</h2>
+    <p class="intro">このワークスペースを利用するには<br/>アクセス用パスワードが必要です。</p>
+    <form method="post" action="/login">
+      <label for="password">アクセス用パスワード</label>
+      <input id="password" type="password" name="password" autocomplete="current-password" minlength="1" required placeholder="パスワードを入力"/>
+      <button type="submit">ワークスペースにログイン <span aria-hidden="true">→</span></button>
+    </form>
+    <div class="login-note">このアプリには、許諾済みの非機密音声のみアップロードしてください。</div>
+  </div><div class="side-foot">© Kiroku · Private Alpha</div></section>
+</main></body></html>

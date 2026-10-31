@@ -1,17 +1,53 @@
-name: Validate notebook
-
+name: Validate notebook and private beta
 on:
   push:
   pull_request:
-
+permissions:
+  contents: read
 jobs:
-  notebook-check:
+  tests:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Check notebook without downloading models or audio
-        run: python3 tests/check_notebook.py
-      - name: Check extracted pipeline offline (no GPU claims)
-        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install beta API test dependencies
+        run: python -m pip install -r requirements-beta-test.txt modal==1.4.3
+      - name: Check original notebook
+        run: python tests/check_notebook.py
+      - name: Run all offline regression and beta integration tests
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Verify Modal SDK decorators and deployment module import
+        run: python -c 'import beta_modal; assert beta_modal.app is not None'
+      - name: Verify beta browser JavaScript syntax
+        run: node --check beta/site.js
+      - name: Verify Python syntax
+        run: python -m compileall -q beta beta_modal.py transcriber
+  react-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install React frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Typecheck and build React production assets
+        working-directory: frontend
+        run: npm run build
+      - name: Ensure authenticated FastAPI bundle paths exist
+        run: |
+          test -s beta/react_dist/index.html
+          test -n "$(find beta/react_dist/assets -maxdepth 1 -name '*.js' -print -quit)"
+          test -n "$(find beta/react_dist/assets -maxdepth 1 -name '*.css' -print -quit)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage37-react-production-bundle
+          path: |
+            beta/react_dist/
+            frontend/package-lock.json
+          retention-days: 7

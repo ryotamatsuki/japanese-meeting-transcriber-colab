@@ -1,0 +1,42 @@
+name: Stage37 React browser UX smoke
+on:
+  push:
+    branches: [feature/private-web-beta-v01-20261030]
+    paths:
+      - 'frontend/**'
+      - 'beta/server.py'
+      - 'scripts/browser_react_stage37_smoke.py'
+      - '.github/workflows/stage37-react-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build production React UI
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install browser test runtime
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Verify desktop and mobile UI with artificial sample data
+        run: python scripts/browser_react_stage37_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stage37-react-browser-previews
+          path: local_runs/react_preview/*.png
+          if-no-files-found: warn
+          retention-days: 14

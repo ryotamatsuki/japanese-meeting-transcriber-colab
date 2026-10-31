@@ -18,8 +18,10 @@ class Config:
     min_speakers: int = 0
     max_speakers: int = 0
     quality_experiment: bool = False
+    overlap_review: bool = False  # beta UI: model-estimated overlap windows only
     speaker_cleanup_ms: int = 0
     asr_beam_size: int = 5
+    asr_model: str = 'large-v3'  # research-only: faster-whisper turbo also supported
 
     def __post_init__(self):
         counts = (self.expected_speakers, self.min_speakers, self.max_speakers)
@@ -31,8 +33,14 @@ class Config:
             raise ValueError('asr_beam_size must be 5 (baseline) or 8 (experimental)')
         if self.asr_beam_size != 5 and not self.quality_experiment:
             raise ValueError('Nonbaseline ASR beam requires quality_experiment')
-        if type(self.quality_experiment) is not bool:
-            raise ValueError('quality_experiment must be boolean')
+        if self.asr_model not in ('large-v3', 'turbo'):
+            raise ValueError('Unapproved ASR model: use large-v3 or turbo')
+        if self.asr_model != 'large-v3' and not self.quality_experiment:
+            raise ValueError('ASR model change requires quality_experiment')
+        if type(self.quality_experiment) is not bool or type(self.overlap_review) is not bool:
+            raise ValueError('quality_experiment and overlap_review must be boolean')
+        if self.overlap_review and not self.enable_diarization:
+            raise ValueError('overlap_review requires diarization')
         if type(self.speaker_cleanup_ms) is not int or not 0 <= self.speaker_cleanup_ms <= 300:
             raise ValueError('speaker_cleanup_ms must be between 0 and 300')
         if self.speaker_cleanup_ms and not self.quality_experiment:

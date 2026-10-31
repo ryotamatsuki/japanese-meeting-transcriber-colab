@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "live_billing_summary_access_confirmed": true,
+  "billing_summary_run_id": 41079742581,
+  "workspace_budget_usd": null,
+  "workspace_budget_dashboard_confirmed": false,
+  "workspace_spend_limit_usd": null,
+  "workspace_spend_limit_dashboard_confirmed": false,
+  "charge_notifications_configured": false,
+  "notification_destination_checked": false,
+  "operator_role": null,
+  "verified_at_utc": null,
+  "private_evidence_hashes": {
+    "workspace_budget_screenshot": null,
+    "spend_limit_screenshot": null,
+    "notification_setting_screenshot": null
+  }
+}

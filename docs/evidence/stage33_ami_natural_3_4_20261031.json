@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "stage": 33,
+  "source": "AMI Meeting Corpus",
+  "source_license": "CC BY 4.0",
+  "source_url": "https://groups.inf.ed.ac.uk/ami/download/",
+  "github_run_id": 41138099732,
+  "artifact_id": 13018132031,
+  "artifact_zip_sha256": "5baf33f452973b6f6831a5edea84ee3eb64964859f925ae5d9f318c2db65f7dd",
+  "code_ref": "98fed73e49aa69d67586ddc80a20a35903e22b07",
+  "speech_language": "en",
+  "speaker_count_supplied_to_model": false,
+  "reference_protocol": "human NXT word timestamps merged with a 150ms gap; proxy RTTM, not independently hand-corrected speech turn boundaries",
+  "collar_seconds": 0,
+  "ignore_overlap": false,
+  "results": [
+    {
+      "meeting_id": "EN2003a",
+      "real_natural_meeting": true,
+      "excerpt_start_seconds": 720,
+      "duration_seconds": 300,
+      "reference_speakers": 3,
+      "reference_intervals": 75,
+      "reference_word_counts": {
+        "A": 381,
+        "B": 296,
+        "C": 293
+      },
+      "reference_rttm_sha256": "c45f16f8faa68d0a49e84aa582eed65158845a0669886e6b9c79b3bae7695fd3",
+      "exclusive": {
+        "predicted_speakers": 3,
+        "der_percent": 17.610057366520827,
+        "jer_percent": 17.886753493275197
+      },
+      "standard": {
+        "predicted_speakers": 3,
+        "der_percent": 13.20610289523011,
+        "jer_percent": 14.431475820917
+      }
+    },
+    {
+      "meeting_id": "EN2004a",
+      "real_natural_meeting": true,
+      "excerpt_start_seconds": 300,
+      "duration_seconds": 300,
+      "reference_speakers": 4,
+      "reference_intervals": 70,
+      "reference_word_counts": {
+        "A": 160,
+        "B": 469,
+        "C": 224,
+        "D": 120
+      },
+      "reference_rttm_sha256": "15dcfce5f39df7ec5c138a4e429b6754c7812fd0d6fac14d41fbfa0e71f05506",
+      "exclusive": {
+        "predicted_speakers": 4,
+        "der_percent": 21.721433613763352,
+        "jer_percent": 31.490579597265345
+      },
+      "standard": {
+        "predicted_speakers": 4,
+        "der_percent": 14.87140486725659,
+        "jer_percent": 23.129891653516946
+      }
+    }
+  ],
+  "research_speaker_count_verification": "PASS",
+  "japanese_asr_accuracy_gate": "NOT_EVALUATED",
+  "formal_release_status": "NO_GO",
+  "limitations": [
+    "English naturally occurring meetings, not Japanese meetings",
+    "Human word times merged into RTTM are a proxy for fully hand-corrected speaker turns",
+    "Two five-minute excerpts only",
+    "No CER or speaker-attributed cpCER assessment",
+    "Do not change current Whisper or exclusive production defaults based on this experiment alone"
+  ]
+}

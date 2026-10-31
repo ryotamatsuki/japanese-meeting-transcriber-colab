@@ -12,6 +12,8 @@ def diarize(job, config, token, metrics):
     import soundfile as sf
     import torch
     DIAR_SETTINGS = {'model': 'pyannote/speaker-diarization-community-1', 'expected': int(EXPECTED_SPEAKERS), 'min': int(MIN_SPEAKERS) if not EXPECTED_SPEAKERS else 0, 'max': int(MAX_SPEAKERS) if not EXPECTED_SPEAKERS else 0}
+    if config.overlap_review:
+        DIAR_SETTINGS['overlap_review'] = True
     if config.quality_experiment:
         # Experiment parameters form part of the cache identity.
         DIAR_SETTINGS["quality_experiment"] = True
@@ -70,21 +72,22 @@ def diarize(job, config, token, metrics):
                     annotation = diar_output.exclusive_speaker_diarization
                     intervals = [{'start': float(turn.start), 'end': float(turn.end), 'speaker_id': str(speaker)} for turn, _, speaker in annotation.itertracks(yield_label=True)]
                     intervals.sort(key=lambda x: (x['start'], x['end']))
-                    if config.quality_experiment:
+                    if config.quality_experiment or config.overlap_review:
                         standard = diar_output.speaker_diarization
                         standard_intervals = [
                             {"start": float(t.start), "end": float(t.end), "speaker_id": str(sp)}
                             for t, _, sp in standard.itertracks(yield_label=True)
                         ]
                         standard_intervals.sort(key=lambda x: (x["start"], x["end"], x["speaker_id"]))
-                        (job["outdir"] / "pyannote_通常話者区間.json").write_text(
+                        if config.quality_experiment:
+                            (job["outdir"] / "pyannote_通常話者区間.json").write_text(
                             json.dumps({"segments": standard_intervals, "settings": DIAR_SETTINGS},
                                        ensure_ascii=False, indent=2), encoding="utf-8")
-                        (job["outdir"] / "pyannote_補正前話者区間.json").write_text(
+                            (job["outdir"] / "pyannote_補正前話者区間.json").write_text(
                             json.dumps({"segments": intervals, "settings": DIAR_SETTINGS},
                                        ensure_ascii=False, indent=2), encoding="utf-8")
                         from .quality import find_overlap_windows
-                        overlap_windows = find_overlap_windows(standard_intervals)
+                        overlap_windows = find_overlap_windows(standard_intervals, minimum_seconds=0.20)
                         (job["outdir"] / "pyannote_重複発話確認候補.json").write_text(
                             json.dumps({"warning": "Model-estimated candidate; listen before attribution",
                                         "segments": overlap_windows, "source": "standard diarization"},

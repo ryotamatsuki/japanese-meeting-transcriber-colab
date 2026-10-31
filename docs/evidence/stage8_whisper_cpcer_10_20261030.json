@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "baseline_run_id": 41054900339,
+  "baseline_artifact_id": 12976708710,
+  "dataset": "IngCrowd/japanese-themed-dialogue",
+  "license": "CC BY-NC 4.0; noncommercial research only",
+  "metric": "permutation cpCER on normalized Japanese characters",
+  "records": [
+    {
+      "id": "01",
+      "eaf_sha256": "c59daa71d0ffa34e50b4c532d33f5c0d2a51ceaa8aea4435a68a87d924f61b32",
+      "reference_characters": 4166,
+      "whisper_attributed_cpcer_percent": 37.71003360537686
+    },
+    {
+      "id": "02",
+      "eaf_sha256": "dee4e82d37805493af85cd18493b7b549294f36b99878687a586d6f5d1235d15",
+      "reference_characters": 4265,
+      "whisper_attributed_cpcer_percent": 38.10082063305979
+    },
+    {
+      "id": "03",
+      "eaf_sha256": "309a9b1ca0b90d7e615c4e6bd6daa31171627e2846c31cb1eb89ef4b26f97a57",
+      "reference_characters": 4380,
+      "whisper_attributed_cpcer_percent": 34.93150684931507
+    },
+    {
+      "id": "04",
+      "eaf_sha256": "1dda6b58d0cb19834c5164632aba46a060768813c5f82bb9e87482f461482a2b",
+      "reference_characters": 4301,
+      "whisper_attributed_cpcer_percent": 36.36363636363637
+    },
+    {
+      "id": "05",
+      "eaf_sha256": "e728b5e9cc74c91dfc2541dee1a404f98e3ff1b71b744512e4622d57a1dd5bdd",
+      "reference_characters": 4460,
+      "whisper_attributed_cpcer_percent": 46.70403587443946
+    },
+    {
+      "id": "06",
+      "eaf_sha256": "ce80381dc46403525442f4ef6d2ca22c3aa4a73b22aeb46652261f364ca735d0",
+      "reference_characters": 4493,
+      "whisper_attributed_cpcer_percent": 48.163810371689294
+    },
+    {
+      "id": "07",
+      "eaf_sha256": "3937a932ba5222a8a4629a24f1470e1237db24e13bed1cae5ae40e4a7b2eccd8",
+      "reference_characters": 4453,
+      "whisper_attributed_cpcer_percent": 48.23714349876488
+    },
+    {
+      "id": "08",
+      "eaf_sha256": "36aaf89d33163770e0cbf8310245437a1d9da5f4d779416e2507917a1547392c",
+      "reference_characters": 4358,
+      "whisper_attributed_cpcer_percent": 47.085819183111525
+    },
+    {
+      "id": "09",
+      "eaf_sha256": "7d9fe991093a438a9412020f9c8129a8206f45b87e2e48dfc2dc23d265ab9c21",
+      "reference_characters": 4667,
+      "whisper_attributed_cpcer_percent": 47.610884936790235
+    },
+    {
+      "id": "10",
+      "eaf_sha256": "63756b137c1d707ce3a4ccf04ea2491736b30373b8591a02da11164df9e27f8f",
+      "reference_characters": 4411,
+      "whisper_attributed_cpcer_percent": 47.51756971208343
+    }
+  ]
+}
