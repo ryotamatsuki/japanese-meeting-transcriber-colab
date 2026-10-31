@@ -43,6 +43,17 @@ jobs:
           echo "Modal credential references and independent budget approval are present."
       - name: Install Modal and HTTP client
         run: python -m pip install modal==1.4.3 httpx==0.28.1
+      - name: Ensure dedicated anonymous signing secret without rotating existing sessions
+        run: |
+          python - <<'PYCODE'
+          import modal, secrets
+          modal.Secret.objects.create(
+              'kiroku-anonymous-session',
+              {'BETA_SESSION_SECRET': secrets.token_urlsafe(48)},
+              allow_existing=True,
+          )
+          print('Dedicated anonymous session secret ready (value never logged).')
+          PYCODE
       - name: Build production React Studio
         working-directory: frontend
         run: |
