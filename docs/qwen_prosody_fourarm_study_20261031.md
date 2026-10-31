@@ -102,6 +102,29 @@ programmed gaps; NOT real speech. Aggregates:
 cannot demonstrate the value of actual prosody. Future design should compare
 measured VAD, pitch continuity and speaker embeddings only once calibrated.
 
+## Separate split study (research extension)
+
+The real-audio merge pilot obtained 13/15/15 ASR utterances versus
+14/23/22 human ELAN turns; only 2/0/2 merge candidates survived, and only
+1/0/1 boundaries had unambiguous ELAN-derived proxy labels. It cannot
+support a positive uplift claim for C or D. This motivated a **separate**
+within-utterance split study, without loosening safety across speaker changes.
+
+`scripts/qwen_boundary_split_study.py` reconstructs the exact Qwen
+ForcedAligner token sequence, rejects any lexical/timestamp discrepancy,
+and selects up to 16 within-utterance candidate boundaries per recording.
+It combines boundaries with punctuation or pauses and a deterministic
+sample of ordinary control boundaries, all selected before seeing reference
+labels. Four corresponding split decisions are
+(A) keep, (B) punctuation/pause rule, (C) Qwen text, (D) real audio RMS/gap
+metadata plus the same Qwen. Outputs are **split/keep/hold** and split-specific
+false-split and missed-split counts. Split denominators are not combined
+with join denominators. If forced-aligned text cannot be mapped exactly to
+the editor row, that recording is marked unavailable for splits.
+
+Any ELAN-derived split labels are still provisional. No real listening
+adjudication has yet taken place.
+
 ## Research-only modules
 
 - `scripts/qwen_boundary_fourarm.py`: candidate universe, RMS, strict actions,
