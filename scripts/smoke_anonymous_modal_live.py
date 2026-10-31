@@ -85,7 +85,7 @@ async def completed(client: httpx.AsyncClient, job: str):
     raise AssertionError("GPU job did not finish within 15 minutes")
 
 
-async def edited_export(client: httpx.AsyncClient, csrf: str, job: str, marker: str):
+async def edited_export(client: httpx.AsyncClient, csrf: str, job: str, marker: str, other_marker: str):
     route = "/api/jobs/" + job
     data = (await required(client, "GET", route + "/rows")).json()["rows"]
     check(len(data) > 0, "ASR produced no editable rows for permitted speech audio")
@@ -98,8 +98,10 @@ async def edited_export(client: httpx.AsyncClient, csrf: str, job: str, marker: 
         check(set(archive.namelist()) >= {
             "文字起こし.txt", "文字起こし.csv", "文字起こし.srt", "文字起こし.json"
         }, "Missing export formats")
-        check(marker in archive.read("文字起こし.txt").decode("utf-8"),
-              "Saved edit not present in TXT export")
+        for name in ("文字起こし.txt", "文字起こし.csv", "文字起こし.srt", "文字起こし.json"):
+            exported = archive.read(name).decode("utf-8-sig")
+            check(marker in exported, "Saved edit missing from an export format")
+            check(other_marker not in exported, "Other session edit leaked into export")
     return len(data)
 
 
@@ -108,6 +110,7 @@ async def main():
     source = Path(os.environ["KIROKU_TEST_AUDIO"])
     check(source.is_file() and source.suffix.lower() in (".ogg", ".wav", ".m4a", ".mp3"),
           "Missing authorized speech audio")
+    started = time.monotonic()
     audio = source.read_bytes()
     check(1000 < len(audio) < 10 * 1024 * 1024, "Unexpected smoke audio size")
     results = {"test": "two_isolated_sessions_real_audio_and_gpu",
@@ -133,9 +136,12 @@ async def main():
                   "User A job listing leaked or missing")
             check({j["id"] for j in list_b.json()["jobs"]} == {job_b},
                   "User B job listing leaked or missing")
-            for owner, other in ((a, job_b), (b, job_a)):
+            check(job_a != job_b, "Job IDs unexpectedly identical")
+            for owner, csrf, other in ((a, csrf_a, job_b), (b, csrf_b, job_a)):
                 for suffix in ("", "/audio", "/rows", "/review", "/download"):
                     await required(owner, "GET", "/api/jobs/" + other + suffix, expected=404)
+                await required(owner, "PUT", "/api/jobs/" + other + "/rows",
+                               headers={"X-CSRF": csrf}, json={"rows": []}, expected=404)
             await required(a, "DELETE", "/api/jobs/" + job_b,
                            headers={"X-CSRF": csrf_a}, expected=404)
             await required(b, "DELETE", "/api/jobs/" + job_a,
@@ -143,9 +149,16 @@ async def main():
             results["owner_isolation"] = True
             states = await asyncio.gather(completed(a, job_a), completed(b, job_b))
             results["gpu_completed"] = all(s["status"] == "complete" for s in states)
+            results["elapsed_to_both_complete_seconds"] = round(time.monotonic() - started, 3)
+            results["pipeline_seconds_per_job"] = [s.get("pipeline_seconds") for s in states]
+            async with httpx.AsyncClient(base_url=url, timeout=90) as unauthenticated:
+                await required(unauthenticated, "GET", "/api/jobs", expected=401)
+                await required(unauthenticated, "GET", "/api/jobs/" + job_a + "/rows", expected=401)
+            await required(a, "PUT", "/api/jobs/" + job_a + "/rows",
+                           headers={"X-CSRF": "invalid"}, json={"rows": []}, expected=403)
             counts = await asyncio.gather(
-                edited_export(a, csrf_a, job_a, "テストA・保存確認"),
-                edited_export(b, csrf_b, job_b, "テストB・保存確認"))
+                edited_export(a, csrf_a, job_a, "テストA・保存確認", "テストB・保存確認"),
+                edited_export(b, csrf_b, job_b, "テストB・保存確認", "テストA・保存確認"))
             results["utterances_per_job"] = counts
             results["edit_and_zip"] = True
             # Ownership denial holds after both jobs complete and edits are saved.
@@ -158,6 +171,8 @@ async def main():
                     response = await client.delete("/api/jobs/" + job,
                         headers={"X-CSRF": csrf})
                     if response.status_code == 200:
+                        for suffix in ("", "/audio", "/rows", "/download"):
+                            await required(client, "GET", "/api/jobs/" + job + suffix, expected=404)
                         removed += 1
                 except httpx.HTTPError:
                     pass
