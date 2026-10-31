@@ -12,7 +12,8 @@ from playwright.async_api import async_playwright
 
 SHARE="25vjhsccliimse0q74z35nv8j5bz31is"
 FILE_ID="1485152795713"
-URL=f"https://riken-share.ent.box.com/s/{SHARE}/file/{FILE_ID}"
+URL=f"https://riken-share.box.com/s/{SHARE}"
+FILE_URL=f"https://riken-share.ent.box.com/s/{SHARE}/file/{FILE_ID}"
 
 
 async def probe():
@@ -53,6 +54,21 @@ async def probe():
             else:
                 out["password_submitted_via_UI"]=False
             out["password_still_visible"]=await page.locator('input[type="password"]').count()>0
+            # On a normally authorized shared folder, navigate to the cited
+            # file preview using the same session and browser UI.
+            if not out["password_still_visible"]:
+                next_response=await page.goto(FILE_URL,wait_until="domcontentloaded",timeout=25000)
+                await page.wait_for_timeout(3500)
+                out["file_http_status_after_folder_visit"]=(
+                    next_response.status if next_response else None)
+            text=(await page.locator("body").inner_text(timeout=3000)).lower()[:10000]
+            out["page_indicators"]={
+                "not_found":("not found" in text or "見つかりません" in text),
+                "restricted":("access denied" in text or "アクセスできません" in text),
+                "password":("password" in text or "パスワード" in text),
+                "file_audio_wav":("audio.wav" in text),
+                "preview":("preview" in text or "プレビュー" in text),
+            }
             out["audio_element_count"]=await page.locator("audio,video").count()
             out["player_visible"]=await page.locator(
                 '[aria-label*="Play"],[aria-label*="再生"],button[title*="Play"]').count()>0
