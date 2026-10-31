@@ -57,7 +57,12 @@ after these runs. All numbers are from the run's numeric-only logs.
 | [Run 41179503156](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41179503156) | 22 | 7 intended joins found; 2 false joins on topic shifts following grammatically incomplete fragments |
 
 Final run: 20/22 match manually designated synthetic boundary judgments,
-7/7 intended joins, 2 false joins, 13 correct nonjoins. These figures are NOT
+7/7 intended joins, 2 false joins, 13 correct nonjoins. Crucially, **the model
+proposed joining all 9 of the 9 eligible candidate pairs** in the final run.
+Thus there is **no demonstrated added value over a simple rule-only "join all
+eligible pairs" baseline** on this synthetic sample; the apparent 20/22
+accuracy is largely attributable to the deterministic candidate filter.
+These figures are NOT
 speech transcription accuracy or an independent test-set generalization rate.
 The first 18 examples were used for iterative rule/prompt development; the
 four later probe examples were also inspected here and cannot subsequently
