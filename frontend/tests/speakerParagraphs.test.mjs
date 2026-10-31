@@ -53,7 +53,7 @@ test('copy default creates readable same-speaker paragraph; raw copy preserves e
 test('empty input and data that was manually split preserve source rows',()=>{
   assert.deepEqual(groupConsecutiveSpeakerRows([]),[])
   const source=structuredClone(rows)
-  source[1].speaker='話者2'
+  source[1].speaker='話者不明'
   assert.equal(groupConsecutiveSpeakerRows(source).length,4)
-  assert.equal(source[1].speaker,'話者2')
+  assert.equal(source[1].speaker,'話者不明')
 })
