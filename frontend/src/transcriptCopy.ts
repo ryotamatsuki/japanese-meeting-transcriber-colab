@@ -27,5 +27,5 @@ export function formatTranscriptForCopy(rows: readonly TranscriptCopyRow[], mode
     if (mode === 'plain') return row.text
     const speech = `${row.speaker}：${row.text}`
     return mode === 'timed' ? `[${clock(row.start)}] ${speech}` : speech
-  }).join('\\n\\n')
+  }).join('\n\n')
 }
