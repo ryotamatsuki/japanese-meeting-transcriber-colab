@@ -1,11 +1,5 @@
 name: Kiroku paired ASR accuracy and A10 timing experiment
 on:
-  push:
-    branches:
-      - feature/kiroku-anonymous-isolation-20261031
-    paths:
-      - .github/workflows/kiroku-paired-asr-cost.yml
-      - modal_compare_asr_cost.py
   workflow_dispatch:
 permissions:
   contents: read
