@@ -24,7 +24,7 @@ jobs:
       - name: Verify beta browser JavaScript syntax
         run: node --check beta/site.js
       - name: Verify Python syntax
-        run: python -m compileall -q beta beta_modal.py beta_modal_anonymous.py transcriber
+        run: python -m compileall -q beta beta_modal.py beta_modal_anonymous.py scripts/smoke_anonymous_modal_live.py transcriber
   react-build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
