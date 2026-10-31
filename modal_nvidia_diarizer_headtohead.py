@@ -75,30 +75,60 @@ def evaluate_models():
     for model_name in MODELS:
         start=time.perf_counter()
         try:
-            model=SortformerEncLabelModel.from_pretrained(model_name)
-            model=model.to("cuda").eval()
-            params=model.sortformer_modules
-            params.chunk_len=340
-            params.chunk_right_context=40
-            params.fifo_len=40
-            params.spkcache_update_period=300
-            params.spkcache_len=264 if "Nemotron" in model_name else 188
-            if hasattr(model,"_check_streaming_parameters"):
-                model._check_streaming_parameters()
-            elif hasattr(params,"_check_streaming_parameters"):
-                params._check_streaming_parameters()
+            use_transformers = model_name == "nvidia/Nemotron-3-Diarization"
+            if use_transformers:
+                from transformers import (
+                    AutoProcessor,AutoModelForAudioFrameClassification)
+                processor=AutoProcessor.from_pretrained(model_name)
+                model=AutoModelForAudioFrameClassification.from_pretrained(
+                    model_name).to("cuda").eval()
+            else:
+                model=SortformerEncLabelModel.from_pretrained(model_name)
+                model=model.to("cuda").eval()
+                params=model.sortformer_modules
+                params.chunk_len=340
+                params.chunk_right_context=40
+                params.fifo_len=40
+                params.spkcache_update_period=300
+                params.spkcache_len=188
+                if hasattr(model,"_check_streaming_parameters"):
+                    model._check_streaming_parameters()
+                elif hasattr(params,"_check_streaming_parameters"):
+                    params._check_streaming_parameters()
             load_s=round(time.perf_counter()-start,3)
             model_info[model_name]={"load_seconds":load_s,
-                                     "status":"loaded"}
+                                     "status":"loaded",
+                                     "backend":("transformers_offline" if use_transformers
+                                                else "nemo_streaming_30_4s")}
             for rid,audio,pin,baseline in frozen:
                 item=report[rid]
                 t=time.perf_counter()
                 try:
-                    with torch.inference_mode():
-                        raw=model.diarize(audio=[str(audio)],batch_size=1)
-                    if not isinstance(raw,(list,tuple)) or len(raw)!=1:
-                        raise ValueError("Expected one diarization sample")
-                    regions=parse_nemo_segments(raw[0],
+                    if use_transformers:
+                        import numpy as np
+                        import soundfile as sf
+                        wav,sample_rate=sf.read(audio,dtype="float32")
+                        if (sample_rate!=16000 or wav.ndim!=1
+                            or abs(len(wav)/sample_rate-pin["duration"])>0.2):
+                            raise ValueError("Frozen waveform identity mismatch")
+                        inp=processor(wav,sampling_rate=16000).to(
+                            model.device,dtype=model.dtype)
+                        with torch.inference_mode():
+                            logits=model(**inp).logits
+                        predictions=processor.extract_speaker_dict(
+                            logits,inp.attention_mask)[0]
+                        if not isinstance(predictions,list):
+                            raise ValueError("Nemotron processor invalid speaker dict")
+                        raw=[[seg["Start"],seg["End"],seg["Speaker"]]
+                             for seg in predictions]
+                        del inp,logits,predictions
+                    else:
+                        with torch.inference_mode():
+                            prediction=model.diarize(audio=[str(audio)],batch_size=1)
+                        if not isinstance(prediction,(list,tuple)) or len(prediction)!=1:
+                            raise ValueError("Expected one diarization sample")
+                        raw=prediction[0]
+                    regions=parse_nemo_segments(raw,
                         duration=float(pin["duration"]),model_name=model_name)
                     s=score_model(pin["reference"],pin["qwen_segments"],
                                   regions,original_hash=pin["qwen_normalized_sha256"])
@@ -108,6 +138,8 @@ def evaluate_models():
                     item[model_name]={"status":"failed",
                         "error_type":type(exc).__name__}
             del model
+            if use_transformers:
+                del processor
         except Exception as exc:
             model_info[model_name]={"status":"failed",
                                     "error_type":type(exc).__name__}
