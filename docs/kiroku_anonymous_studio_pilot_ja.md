@@ -50,3 +50,17 @@ modal deploy beta_modal_anonymous.py
 - このワークフローは、GitHub ActionsリポジトリSecretsの `MODAL_TOKEN_ID` と `MODAL_TOKEN_SECRET`、管理者がModalの実画面で費用上限を確認したうえでGitHubリポジトリVariable `KIROKU_BUDGET_VERIFIED=yes` を設定した場合だけデプロイを許す。これは自己申告ゲートであり実予算の独立検証ではない。あわせてModal内Secret `kiroku-anonymous-session` の `BETA_SESSION_SECRET` と、既存 `transcriber-hf` の `HF_TOKEN` が必要。
 - 実験失敗時はデプロイ済みの匿名アプリを停止する処理を用意。成功時はアプリを保持し、公開URLをActionsのStep Summaryへ記録する。
 - [GitHub Actions Run 41155771547](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41155771547)：Python 170件PASS、ReactビルドPASS、スクリプト構文チェックPASS。ただしデプロイ前提の設定を値を表示せずに確認したところ **MODAL_DEPLOY_CREDENTIALS_CONFIGURED=no、KIROKU_BUDGET_APPROVAL_CONFIGURED=no**。そのため、この時点では実デプロイ・本物のGPU処理・ライブ2クライアントE2Eは**未実施**である。
+
+
+## 2026-10-31 — Workクラウドブラウザによる管理画面監査
+
+- PR #4、#5はともにopen/Draft。調査開始時の#5 HEADは `3b74def9b263b7f3700ee557eb30d83a8ca29e6d`。リポジトリ内AGENTS.mdは見つからなかった。main・既存Modalアプリは変更していない。
+- Modalの認証済み管理画面でWorkspace `ryota-matsuki`（Owner）、環境 `main` を確認。既存live appは6件で、匿名版アプリはまだ存在しない。
+- Usage limitは$30、当期使用$4.52（credits）、請求$0、残credits $25.48。Spend limitは「Set spend limit」の状態で、明示的な保存済み上限は確認できない。入力画面にDefault $0という表示があることだけをもって保存済みのHard Spend Limitとは認定しない。画面説明では停止後もVolume storage chargesは発生する。
+- Usage alertsはEmail/In-appとも有効。main環境の通知欄にはMuted表示がある。Workspace-wide concurrent GPU limitは10、現在使用0。A10のその時点の実在庫・起動成功までは未検証。
+- Secrets一覧で `transcriber-hf` の存在を確認（値は閲覧していない）。`kiroku-anonymous-session` は存在しない。作業環境のModal profile・環境変数credentialsは未設定。CLIの `modal token new` は「Could not connect to the Modal server」で失敗し、資格情報は取得していない。
+- ローカル検証：170 offline tests PASS。初回 `npm ci` はlockfile欠如で失敗。package-lock.jsonを追加した後の `npm ci` と `npm run build` はPASS。これはデプロイ前の再現可能な不具合修正であり、GPU試験の成功ではない。
+- live smokeを強化：両方向の編集PUT拒否、Cookieなし401、不正CSRF403、全4形式の編集マーカーと相手のマーカー非混入、削除後の状態・音声・結果・ZIPの404、両ジョブ完了までの経過時間とpipeline_secondsを検査する。アップロード途中の失敗に備え、ID発行時点でクリーンアップ対象へ登録する。
+- **BLOCKED / 未実施**：匿名版デプロイ、公開URL取得、実GPU2ジョブ、独立ブラウザ2コンテキストのUI操作、PC/スマートフォン相当画面、実環境の24h物理削除。モックや過去の別アプリ結果でPASSに代用しない。
+- 次の具体的操作は、デプロイ資格情報の作成と対象リポジトリActions Secretsへの登録、匿名署名Secret作成、明示的Spend Limitの確認・必要なら$0設定。ブラウザで新規credentials・アクセス権を作る操作に対する確認前に停止した。資格情報はコード・本文・公開ログへ保存しない。
+- default branchにworkflow定義が必要なdispatchを回避する経路として、既存live workflowは対象ブランチの自ファイル更新pushで起動する構成。実際のdispatch呼出しやデプロイrunはこの作業では実行していない。
