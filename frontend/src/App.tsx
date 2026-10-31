@@ -14,7 +14,7 @@ type Job = { id: string; filename: string; status: JobStatus; received: number;
 type Row = { start: number; end: number; speaker: string; text: string }
 type ReviewWindow = { id: string; start: number; end: number }
 type Review = { available: boolean; total_candidates: number; windows: ReviewWindow[]; reviewed_ids: string[] }
-type Session = { csrf: string; limits: { file_bytes: number; duration_seconds: number } }
+type Session = { csrf: string; anonymous?: boolean; limits: { file_bytes: number; duration_seconds: number } }
 const PREVIEW_ONLY = import.meta.env.VITE_PREVIEW_ONLY === 'true'
 const CHUNK = 4 * 1024 * 1024
 const PAGE = 60
@@ -24,7 +24,7 @@ async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.method && !['GET', 'HEAD'].includes(init.method.toUpperCase())) headers.set('X-CSRF', csrf)
   const res = await fetch(url, { ...init, headers, credentials: 'same-origin' })
-  if (res.status === 401) { window.location.assign('/login'); throw Error('ログインが必要です') }
+  if (res.status === 401) { window.location.assign('/'); throw Error('セッションの期限が切れました。ページを再読み込みしてください') }
   if (!res.ok) {
     let reason = 'HTTP ' + res.status
     try { const value = await res.json() as {detail?: string}; if (typeof value.detail === 'string') reason = value.detail } catch {}
@@ -312,8 +312,8 @@ export default function App() {
           <FileAudio2 size={18}/><span><strong title={j.filename}>{j.filename}</strong><small>{statuses[j.status]?.label||j.status}</small></span>
           {j.status==='complete'&&<ChevronRight size={14}/>}</button>)}</div>
       <div className="sidebar-footer">
-        <div className="sidebar-privacy"><ShieldCheck size={18}/><div>{PREVIEW_ONLY ? 'UIデモ（実データなし）' : '非公開ワークスペース'}<small>{PREVIEW_ONLY ? 'アップロード・保存は無効' : '非機密音声のみ'}</small></div></div>
-        {!PREVIEW_ONLY&&<button onClick={()=>void logout()}><LogOut size={17}/> ログアウト</button>}
+        <div className="sidebar-privacy"><ShieldCheck size={18}/><div>{PREVIEW_ONLY ? 'UIデモ（実データなし）' : session?.anonymous ? 'あなた専用の一時作業領域' : '非公開ワークスペース'}<small>{PREVIEW_ONLY ? 'アップロード・保存は無効' : session?.anonymous ? '録音は24時間後に自動削除・非機密音声のみ' : '非機密音声のみ'}</small></div></div>
+        {!PREVIEW_ONLY&&!session?.anonymous&&<button onClick={()=>void logout()}><LogOut size={17}/> ログアウト</button>}
       </div>
     </aside>
     {mobileMenu&&<div className="sidebar-shade" onClick={()=>setMobileMenu(false)}/>}
@@ -321,7 +321,7 @@ export default function App() {
       <header className="topbar"><div className="breadcrumbs">
         <button className="menu-button" onClick={()=>setMobileMenu(true)} aria-label="メニューを開く"><Menu size={21}/></button>
         <span>ワークスペース</span><ChevronRight size={15}/><strong>{selected?'文字起こし編集':'ダッシュボード'}</strong>
-      </div><div className="topbar-side"><span className="private-tag"><i/> {PREVIEW_ONLY ? 'PUBLIC UI PREVIEW' : 'PRIVATE ALPHA'}</span><span className="avatar">K</span></div></header>
+      </div><div className="topbar-side"><span className="private-tag"><i/> {PREVIEW_ONLY ? 'PUBLIC UI PREVIEW' : session?.anonymous ? 'ANONYMOUS SESSION' : 'PRIVATE ALPHA'}</span><span className="avatar">K</span></div></header>
       <main className="workspace">
         {PREVIEW_ONLY&&<div className="preview-warning" role="status"><ShieldCheck size={19}/><span><strong>パスワード不要のデザインプレビュー</strong>　サンプル会議だけを表示しています。音声アップロード・AI推論・保存・ダウンロードは無効です。</span></div>}
         {!ready?<div className="loading"><LoaderCircle size={30} className="spin"/> 認証状態を確認しています…</div>:
