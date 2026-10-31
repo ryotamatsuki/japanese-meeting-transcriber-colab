@@ -93,3 +93,89 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Verify desktop and smartphone copy, formats and clipboard fallback
         run: python scripts/browser_react_stage37_smoke.py
+
+  jcre3-deploy-once:
+    concurrency:
+      group: kiroku-jcre3-unseen-once-20261031
+      cancel-in-progress: false
+    needs: tests
+    if: ${{ github.event_name == 'push' && github.ref_name == 'research/qwen-fixed-weights-quality-20261031' && contains(github.event.head_commit.message, '[jcre3-pilot-once]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      KIROKU_BUDGET_VERIFIED: ${{ vars.KIROKU_BUDGET_VERIFIED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Credentials and existing budget flag required
+        run: |
+          test -n "$MODAL_TOKEN_ID" && test -n "$MODAL_TOKEN_SECRET"
+          test "$KIROKU_BUDGET_VERIFIED" = yes
+      - run: python -m pip install modal==1.4.3
+      - name: Deploy isolated intake and private evaluation function
+        run: modal deploy modal_qwen_unseen_jcre3.py
+      - name: Print temporary intake URL only
+        run: |
+          python - <<'PYCODE'
+          import modal
+          f=modal.Function.from_name('kiroku-jcre3-unseen-pilot-20261031-01','intake')
+          print('JCRE3_INTAKE_URL',f.get_web_url())
+          PYCODE
+
+  jcre3-evaluate-once:
+    needs: jcre3-deploy-once
+    if: ${{ needs.jcre3-deploy-once.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    concurrency:
+      group: kiroku-jcre3-unseen-once-20261031
+      cancel-in-progress: false
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install modal==1.4.3
+      - name: Wait on CPU for the fixed, licensed corpus input
+        run: |
+          python - <<'PYCODE'
+          import modal,time
+          volume=modal.Volume.from_name('kiroku-jcre3-unseen-inputs-20261031-01')
+          deadline=time.monotonic()+600
+          while time.monotonic()<deadline:
+              if any(v.path.strip('/')=='eval.zip' for v in volume.listdir('/')):
+                  print('JCRE3_INPUT_PRESENT');break
+              time.sleep(5)
+          else:
+              raise SystemExit('Corpus input did not arrive; no GPU invoked')
+          PYCODE
+      - name: One A10 invocation, frozen 30-second baseline on three records
+        run: modal run modal_qwen_unseen_jcre3.py --output "$RUNNER_TEMP/jcre3-numeric.json"
+      - name: Verify evaluation actually completed
+        run: |
+          python - <<'PYCODE'
+          import json,os,pathlib
+          r=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'jcre3-numeric.json').read_text())
+          assert len(r['records'])==3
+          assert r['successful_records']==3, 'See numeric per-record failure stage'
+          PYCODE
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: jcre3-unseen-numeric-only
+          path: ${{ runner.temp }}/jcre3-numeric.json
+          retention-days: 7
+      - name: Stop only this temporary pilot app
+        if: ${{ always() }}
+        run: modal app stop --yes kiroku-jcre3-unseen-pilot-20261031-01
+      - name: Remove only the temporary evaluation input
+        if: ${{ always() }}
+        continue-on-error: true
+        run: modal volume rm kiroku-jcre3-unseen-inputs-20261031-01 /eval.zip

@@ -1,7 +1,7 @@
 """CPU fixtures for bounded model failover, no Qwen weights or raw audio."""
 import unittest
 from types import SimpleNamespace
-from scripts.qwen_chunk_retry import infer_chunk
+from scripts.qwen_chunk_retry import infer_chunk, AlignmentFailure
 from scripts.evaluate_asr_cer import normalized_ja
 
 
@@ -127,6 +127,14 @@ class QwenChunkRecoveryTests(unittest.TestCase):
         rows,meta=infer_chunk(model,self.audio,0)
         self.assertEqual(len(rows),2)
         self.assertEqual(meta['retries'],1)
+
+    def test_failure_diagnostic_has_only_code_and_numeric_bounds(self):
+        with self.assertRaises(AlignmentFailure) as raised:
+            infer_chunk(Fake(1),self.audio,100)
+        self.assertEqual(raised.exception.diagnostic,
+                         {'reason':'lexical_mismatch','offset_seconds':100.,
+                          'duration_seconds':7.5})
+        self.assertNotIn('はい',str(raised.exception))
 
     def test_rejects_invalid_bounds(self):
         with self.assertRaises(ValueError):

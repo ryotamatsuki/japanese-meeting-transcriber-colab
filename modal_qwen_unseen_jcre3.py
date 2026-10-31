@@ -41,7 +41,8 @@ def evaluate():
     from transcriber.processor import Config
     from transcriber.diarization import diarize
     from scripts.jcre3_reference import load_reference
-    from scripts.qwen_chunk_retry import infer_chunk
+    from scripts.qwen_chunk_retry import infer_chunk, AlignmentFailure
+    from scripts.qwen_short_tail import coalesce_short_tail
     from scripts.qwen_timing_bridge import attribute_qwen
     from scripts.qwen_quality_experiments import edit_components
     from scripts.evaluate_attributed_transcript import permutation_cer
@@ -105,6 +106,10 @@ def evaluate():
             try:
                 collected=[];retries=0
                 chunks=split_audio_into_chunks(np.asarray(signal,dtype=np.float32),sr=16000,max_chunk_sec=30.)
+                upstream_count=len(chunks)
+                chunks=coalesce_short_tail(signal,chunks)
+                item['upstream_chunks']=upstream_count
+                item['chunk_layout']=[{'offset_seconds':float(o),'duration_seconds':len(c)/16000} for c,o in chunks]
                 for chunk,offset in chunks:
                     rows,meta=infer_chunk(model,np.asarray(chunk,dtype=np.float32),float(offset))
                     collected.extend(rows);retries+=meta['retries']
@@ -122,6 +127,8 @@ def evaluate():
                     'aligned_tokens':integrity['aligned_tokens'],'tail_seconds':integrity['final_word_end_seconds']})
             except Exception as exc:
                 item.update({'status':'failed','failure_stage':stage,'error_class':type(exc).__name__})
+                if isinstance(exc,AlignmentFailure):
+                    item['alignment_failure']=exc.diagnostic
             item['inference_and_eval_seconds']=time.perf_counter()-begin
         good=[r for r in findings if r['status']=='success']
         return {'dataset':'J-CRe3','source_revision':manifest['revision'],'bundle_sha256':BUNDLE_SHA,
