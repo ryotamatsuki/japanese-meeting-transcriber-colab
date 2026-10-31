@@ -52,6 +52,18 @@ def run_synthetic():
          [row(0, .7, "話者1", "県の計画は"),
           row(.8, 1.3, "話者2", "はい"),
           row(1.4, 2.5, "話者1", "来年度からです。")], []),
+        ("fragment_3",
+         [row(0, .7, "話者1", "議案の説明を"),
+          row(.8, 1.9, "話者1", "続けます。")], [0]),
+        ("finished_immediate",
+         [row(0, .7, "話者1", "確認しました。"),
+          row(.8, 1.9, "話者1", "次の議題です。")], []),
+        ("rapid_backchannel",
+         [row(0, .2, "話者1", "はい"),
+          row(.25, .6, "話者1", "はい")], []),
+        ("ambiguous_continuation",
+         [row(0, .9, "話者1", "次の方は"),
+          row(1.0, 1.9, "話者1", "はい、こちらです。")], []),
     ]
     output = []
     def infer(messages):
@@ -67,7 +79,11 @@ def run_synthetic():
 
     for name, rows, expected in cases:
         t0 = time.monotonic()
-        result = run_second_pass(rows, infer)
+        inference_calls = [0]
+        def measured_infer(messages):
+            inference_calls[0] += 1
+            return infer(messages)
+        result = run_second_pass(rows, measured_infer)
         actual = [r["source_indices"][0]
                   for r in result["rows"]
                   if len(r.get("source_indices", [])) > 1]
@@ -75,6 +91,7 @@ def run_synthetic():
         output.append({"case": name, "status": result["status"],
                        "merges": result["merge_count"],
                        "expected_merges": len(expected),
+                       "inference_calls": inference_calls[0],
                        "matched": (result["merge_count"] == len(expected)
                                    and (not expected or actual == expected)),
                        "seconds": round(time.monotonic() - t0, 3)})
