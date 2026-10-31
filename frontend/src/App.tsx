@@ -429,6 +429,7 @@ export default function App() {
             <div className="inspector-warning"><ShieldCheck size={18}/><span>話者ラベルはAIの推定です。音声との照合が必要です。</span></div>
           </aside></div>
           <div className="audio-dock"><audio key={selected.id} ref={player} src={'/api/jobs/'+selected.id+'/audio'} preload="metadata"
+              onLoadedMetadata={e=>{e.currentTarget.playbackRate=speed}}
               onTimeUpdate={e=>setTime(e.currentTarget.currentTime)} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onEnded={()=>setPlaying(false)}/>
             <div className="dock-file"><div className="dock-file-icon"><Headphones size={22}/></div><div><strong title={selected.filename}>{selected.filename}</strong><span>オリジナル音声</span></div></div>
             <div className="dock-player"><button className="skip-button" aria-label="3秒戻る" title="3秒戻る (←)" onClick={()=>seek(Math.max(0,time-3))}><RotateCcw size={18}/><span>3秒</span></button><button className="play-button" aria-label={playing?'一時停止':'再生'} onClick={()=>{if(!player.current)return;if(playing)player.current.pause();else void player.current.play().catch(()=>setNotice({message:'再生に失敗しました',error:true}))}}>{playing?<Pause size={20} fill="currentColor"/>:<Play size={20} fill="currentColor"/>}</button>

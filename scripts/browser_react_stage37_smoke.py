@@ -1,6 +1,8 @@
 """Browser smoke test for Stage37 built React frontend, using synthetic fixtures only."""
 from __future__ import annotations
 import json
+import io
+import wave
 import mimetypes
 import os
 import threading
@@ -28,6 +30,13 @@ SAMPLES=[
 ROWS=[dict(start=i*13.5,end=i*13.5+12,speaker=("話者A","話者B","話者C")[i%3],
            text=SAMPLES[i%4]) for i in range(70)]
 
+# Synthetic PCM fixture only: exercise real HTMLMediaElement metadata and rate.
+_audio=io.BytesIO()
+with wave.open(_audio,'wb') as _wav:
+    _wav.setnchannels(1);_wav.setsampwidth(2);_wav.setframerate(16000)
+    _wav.writeframes(b'\x00\x00'*32000)
+SILENCE_WAV=_audio.getvalue()
+
 class MockBackend(BaseHTTPRequestHandler):
     def log_message(self,*args): pass
     def json(self,obj):
@@ -45,6 +54,12 @@ class MockBackend(BaseHTTPRequestHandler):
         if path=="/api/jobs":return self.json(dict(jobs=JOBS))
         if path=="/api/jobs/"+id_a:return self.json(JOBS[0])
         if path=="/api/jobs/"+id_b:return self.json(JOBS[1])
+        if path in ("/api/jobs/"+id_a+"/audio","/api/jobs/"+id_b+"/audio"):
+            self.send_response(200)
+            self.send_header("Content-Type","audio/wav")
+            self.send_header("Content-Length",str(len(SILENCE_WAV)))
+            self.end_headers();self.wfile.write(SILENCE_WAV)
+            return
         if path.endswith("/rows"):return self.json(dict(rows=ROWS))
         if path.endswith("/review"):
             return self.json(dict(available=True,total_candidates=2,
@@ -78,6 +93,17 @@ def main():
             desktop.screenshot(path=str(OUT/"dashboard.png"),full_page=True)
             desktop.get_by_role("button",name="編集する").first.click()
             desktop.get_by_role("heading",name="文字起こし",exact=True).wait_for()
+            desktop.wait_for_function("() => document.querySelector('audio')?.readyState >= 1")
+            desktop.get_by_label("再生速度").select_option("1.5")
+            assert desktop.locator("audio").evaluate("e => e.playbackRate")==1.5
+            for job_id,filename in ((id_b,JOBS[1]['filename']),(id_a,JOBS[0]['filename'])):
+                desktop.locator(".side-item").filter(has_text=filename).click()
+                desktop.wait_for_function("id => {const a=document.querySelector('audio');"
+                    "return a && a.src.includes(id) && a.readyState>=1}",arg=job_id)
+                assert desktop.get_by_label("再生速度").input_value()=="1.5"
+                assert desktop.locator("audio").evaluate("e => e.playbackRate")==1.5, \
+                    "Selected playback speed must survive a job switch"
+            print("PLAYBACK_RATE_JOB_SWITCH_PASS")
             # Stub only the OS clipboard; keep the actual React copy handler.
             desktop.evaluate("""() => {
                 window.__lastCopiedTranscript = '';

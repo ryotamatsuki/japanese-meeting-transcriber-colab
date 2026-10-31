@@ -93,4 +93,3 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Verify desktop and smartphone copy, formats and clipboard fallback
         run: python scripts/browser_react_stage37_smoke.py
-
