@@ -15,7 +15,7 @@ import math
 from scripts.evaluate_asr_cer import normalized_ja
 from scripts.evaluate_attributed_transcript import permutation_cer
 from scripts.qwen_error_decomposition import (
-    annotate_words, extract_words, group_words, reference_to_regions)
+    annotate_words, extract_words, group_words, reference_to_regions, IntervalIndex)
 from transcriber.alignment import assign_and_group
 
 # Predeclared before running new GPU ablations.
@@ -68,6 +68,36 @@ def _legacy_cpcer(reference, asr, diar, frozen, word_count):
             "unassigned_characters": c["unassigned_characters"]}
 
 
+def _safe_max_overlap_cpcer(reference, asr, diar, frozen):
+    """Same voting objective for auto/privileged regions, overlap-safe index.
+
+    Nearest speaker fallback is kept at 1.2 seconds to mimic legacy intent,
+    but searches all real intervals to avoid invalid bisect over Regular end times.
+    """
+    idx = IntervalIndex(diar)
+    assigned = []
+    for word in extract_words(asr):
+        a, b = word["start"], word["end"]
+        activity = idx.overlapping(a, b)
+        votes = {}
+        for u, v, speaker in activity:
+            votes[speaker] = votes.get(speaker, 0.0) + max(0.0, v-u)
+        if votes:
+            chosen = max(votes, key=lambda sp: votes[sp])
+            label = idx.labels[chosen]
+        else:
+            candidate = idx.nearest(a, b)
+            label = (candidate["speaker_candidate"] if candidate is not None
+                     and candidate["distance_seconds"] <= 1.2 else "話者不明")
+        assigned.append({**word, "speaker": label})
+    grouped = group_words(assigned)
+    if normalized_ja("".join(r["text"] for r in grouped)) != frozen:
+        raise ValueError("Safe speaker voting altered recognized text")
+    result = permutation_cer(reference, grouped)
+    return {"cpcer": result["cpcer"], "edit_distance": result["edit_distance"],
+            "unassigned_characters": result["unassigned_characters"]}
+
+
 def _conservative_cpcer(reference, asr, diar, frozen):
     words = annotate_words(asr, diar)
     rows = group_words(words)
@@ -96,7 +126,8 @@ def evaluate_sensitivity(reference, asr_segments, exclusive, regular, duration,
     if tuple(offsets) != OFFSETS_SECONDS:
         raise ValueError("Study offsets must be pre-registered")
     baseline = _legacy_cpcer(reference, asr_segments, exclusive, frozen, count)
-    oracle_legacy = _legacy_cpcer(reference, asr_segments, oracle, frozen, count)
+    oracle_safe = _safe_max_overlap_cpcer(reference, asr_segments, oracle, frozen)
+    auto_safe = _safe_max_overlap_cpcer(reference, asr_segments, exclusive, frozen)
     auto_cons = _conservative_cpcer(reference, asr_segments, exclusive, frozen)
     oracle_cons = _conservative_cpcer(reference, asr_segments, oracle, frozen)
     regular_cons = _conservative_cpcer(reference, asr_segments, regular, frozen)
@@ -104,18 +135,18 @@ def evaluate_sensitivity(reference, asr_segments, exclusive, regular, duration,
     for shift in offsets:
         auto_intervals, auto_meta = shifted_intervals(exclusive, shift, duration)
         oracle_intervals, oracle_meta = shifted_intervals(oracle, shift, duration)
-        auto = _legacy_cpcer(reference, asr_segments, auto_intervals, frozen, count)
-        human = _legacy_cpcer(reference, asr_segments, oracle_intervals, frozen, count)
+        auto = _safe_max_overlap_cpcer(reference, asr_segments, auto_intervals, frozen)
+        human = _safe_max_overlap_cpcer(reference, asr_segments, oracle_intervals, frozen)
         sweeps.append({"relative_shift_seconds": shift,
-                       "auto_legacy_cpcer": auto["cpcer"],
-                       "auto_legacy_edits": auto["edit_distance"],
-                       "human_regions_legacy_cpcer": human["cpcer"],
-                       "human_regions_legacy_edits": human["edit_distance"],
+                       "auto_safe_overlap_cpcer": auto["cpcer"],
+                       "auto_safe_overlap_edits": auto["edit_distance"],
+                       "human_regions_safe_overlap_cpcer": human["cpcer"],
+                       "human_regions_safe_overlap_edits": human["edit_distance"],
                        "auto_interval_clipping": auto_meta,
                        "human_interval_clipping": oracle_meta})
     assert sweeps[3]["relative_shift_seconds"] == 0.0
-    if (sweeps[3]["auto_legacy_edits"] != baseline["edit_distance"]
-            or sweeps[3]["human_regions_legacy_edits"] != oracle_legacy["edit_distance"]):
+    if (sweeps[3]["auto_safe_overlap_edits"] != auto_safe["edit_distance"]
+            or sweeps[3]["human_regions_safe_overlap_edits"] != oracle_safe["edit_distance"]):
         raise AssertionError("Zero-shift arm does not replicate frozen baseline")
     return {
         "study": "matched Qwen-ASR text, matched Qwen token timing; varying only speaker regions",
@@ -124,7 +155,8 @@ def evaluate_sensitivity(reference, asr_segments, exclusive, regular, duration,
         "reference_characters": permutation_cer(reference, group_words(
             annotate_words(asr_segments, exclusive)))["reference_characters"],
         "baseline_legacy_exclusive": baseline,
-        "human_regions_legacy_diagnostic": oracle_legacy,
+        "auto_safe_max_overlap": auto_safe,
+        "human_regions_safe_max_overlap_diagnostic": oracle_safe,
         "auto_conservative_exclusive": auto_cons,
         "auto_conservative_regular": regular_cons,
         "human_regions_conservative_diagnostic": oracle_cons,
