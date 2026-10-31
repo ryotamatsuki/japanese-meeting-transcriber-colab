@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent, ReactNode } from 'react'
 import {
-  Activity, AlertCircle, ArrowRight, Check, CheckCheck, ChevronDown, ChevronLeft,
+  Activity, AlertCircle, ArrowRight, Check, CheckCheck, ChevronDown, ChevronLeft, Copy,
   ChevronRight, Clock3, CloudUpload, Download, FileAudio2, FileText, Headphones,
   LoaderCircle, LogOut, Menu, Mic2, Pause, Play, Plus, RotateCw, Save, Search,
   ShieldCheck, SlidersHorizontal, Trash2, Volume2, WandSparkles, X, RotateCcw, Pencil, ListChecks
 } from 'lucide-react'
+import { formatTranscriptForCopy } from './transcriptCopy'
+import type { TranscriptCopyMode } from './transcriptCopy'
 
 type JobStatus = 'uploading' | 'queued' | 'running' | 'complete' | 'failed' | 'deleted'
 type Job = { id: string; filename: string; status: JobStatus; received: number;
@@ -81,6 +83,9 @@ export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false)
   const [actionId, setActionId] = useState<string | null>(null)
   const [notice, setNotice] = useState<{message: string; error?: boolean} | null>(null)
+  const [copyMode, setCopyMode] = useState<TranscriptCopyMode>('speaker')
+  const [manualCopyText, setManualCopyText] = useState<string | null>(null)
+  const manualCopyField = useRef<HTMLTextAreaElement | null>(null)
   const player = useRef<HTMLAudioElement | null>(null)
   const inputFile = useRef<HTMLInputElement | null>(null)
   const rowNodes = useRef(new Map<number, HTMLElement>())
@@ -107,6 +112,12 @@ export default function App() {
     void initialize()
     return () => { mounted = false }
   }, [refresh])
+  useEffect(() => {
+    if (manualCopyText !== null) {
+      manualCopyField.current?.focus()
+      manualCopyField.current?.select()
+    }
+  }, [manualCopyText])
   useEffect(() => {
     // The edit workspace must open at the top, not preserve a long dashboard's scroll position.
     window.scrollTo({top:0,behavior:'instant'})
@@ -192,6 +203,28 @@ export default function App() {
   function closeJob() {
     if (!abandon()) return
     setSelected(null); selectedId.current=null; setRows([]);setChanged(false);setReview(null);setPlaying(false)
+  }
+  function copyTranscript() {
+    // Copy all rows, never only the active search/filter or the current page.
+    // Call writeText directly from the click handler for Safari user activation.
+    const text = formatTranscriptForCopy(rows, copyMode)
+    if (!text) {
+      setNotice({message:'コピーできる発言がありません。',error:true})
+      return
+    }
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable')
+      void navigator.clipboard.writeText(text).then(
+        () => setNotice({message:'全文をコピーしました。LINEやメモに貼り付けできます。'}),
+        () => {
+          setManualCopyText(text)
+          setNotice({message:'自動コピーできませんでした。表示された文章を選択してコピーしてください。',error:true})
+        },
+      )
+    } catch {
+      setManualCopyText(text)
+      setNotice({message:'自動コピーできませんでした。表示された文章を選択してコピーしてください。',error:true})
+    }
   }
   function pick(f: File | null) { if (f) setFile(f) }
   function onDrop(e: DragEvent<HTMLDivElement>) { e.preventDefault();setDragging(false);pick(e.dataTransfer.files.item(0)) }
@@ -335,6 +368,16 @@ export default function App() {
             <button id="save-transcript" className="primary-button" disabled={PREVIEW_ONLY||!changed||saving} onClick={()=>void save()}>{saving?<LoaderCircle size={17} className="spin"/>:<Save size={17}/>} 保存する</button>
             {PREVIEW_ONLY||changed||saving?<button className="outlined-button" disabled title={PREVIEW_ONLY?'公開プレビューでは出力できません':'先に変更を保存してください'}><Download size={17}/> ZIP出力</button>:
               <a className="outlined-button" href={'/api/jobs/'+selected.id+'/download'}><Download size={17}/> ZIP出力</a>}
+            <div className="copy-actions">
+              <label className="visually-hidden" htmlFor="copy-mode">コピー形式</label>
+              <select id="copy-mode" aria-label="コピー形式" value={copyMode} onChange={e=>setCopyMode(e.target.value as TranscriptCopyMode)}>
+                <option value="speaker">話者付き</option>
+                <option value="plain">発言のみ</option>
+                <option value="timed">時刻・話者付き</option>
+              </select>
+              <button type="button" className="outlined-button copy-button" disabled={!rows.some(r=>r.text.trim())}
+                onClick={copyTranscript}><Copy size={17}/> 全文コピー</button>
+            </div>
           </div></div>
           <div className="editing-grid"><section className="transcript-panel">
             <div className="panel-header studio-header"><div><h2>文字起こし</h2><p>音声を聞きながら、発言を確認・編集</p></div>
@@ -433,5 +476,15 @@ export default function App() {
       <footer className="app-footer"><span>Kiroku · Private Alpha v0.1</span><span>音声は24時間経過後に順次削除 · AIの出力には誤りが含まれる場合があります</span></footer>
     </div>
     {notice&&<div className={'toast'+(notice.error?' toast-error':'')} role="status">{notice.error?<AlertCircle size={18}/>:<Check size={18}/>}<span>{notice.message}</span><button onClick={()=>setNotice(null)} aria-label="通知を閉じる"><X size={17}/></button></div>}
+    {manualCopyText!==null&&<div className="copy-overlay">
+      <div className="copy-dialog" role="dialog" aria-modal="true" aria-labelledby="copy-dialog-title">
+        <div className="copy-dialog-header"><h2 id="copy-dialog-title">テキストを手動でコピー</h2>
+          <button type="button" aria-label="コピー画面を閉じる" onClick={()=>setManualCopyText(null)}><X size={19}/></button></div>
+        <p>コピーが許可されなかったため、下の文章を長押しして「コピー」を選んでください。</p>
+        <textarea ref={manualCopyField} readOnly value={manualCopyText} aria-label="コピー用の全文テキスト"
+          onFocus={e=>e.currentTarget.select()} onClick={e=>e.currentTarget.select()}/>
+        <button type="button" className="outlined-button" onClick={()=>setManualCopyText(null)}>閉じる</button>
+      </div>
+    </div>}
   </div>
 }
