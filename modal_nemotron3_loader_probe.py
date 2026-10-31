@@ -27,7 +27,7 @@ def probe():
         model_id="nvidia/Nemotron-3-Diarization"
         p=AutoProcessor.from_pretrained(model_id)
         m=AutoModelForAudioFrameClassification.from_pretrained(
-            model_id,device_map="auto")
+            model_id).to("cuda")
         m.eval()
         sr=p.feature_extractor.sampling_rate
         assert sr==16000
