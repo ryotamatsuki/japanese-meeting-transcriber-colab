@@ -71,6 +71,8 @@ def verified_labels_from_review(sheet, *, annotators_required=2):
         if annotators_required==2:
             if a not in ("merge","keep","uncertain") or b not in ("merge","keep","uncertain"):
                 raise ValueError("Two independent labels required")
+            if a==b and final!=a:
+                raise ValueError("Final label contradicts unanimous reviewers")
             if a!=b and not boundary.get("adjudication_note"):
                 raise ValueError("Disagreement needs written adjudication")
         elif a not in ("merge","keep","uncertain"):
