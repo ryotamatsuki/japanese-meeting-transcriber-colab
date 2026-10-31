@@ -95,9 +95,9 @@ jobs:
         run: python scripts/browser_react_stage37_smoke.py
 
   qwen-research-screen-once:
-    name: Qwen boundary context paired comparison (one-off)
+    name: Qwen 45s bridge limit correction (one-off)
     needs: tests
-    if: ${{ github.event_name == 'push' && github.ref_name == 'research/qwen-fixed-weights-quality-20261031' && contains(github.event.head_commit.message, '[qwen-boundary-once]') }}
+    if: ${{ github.event_name == 'push' && github.ref_name == 'research/qwen-fixed-weights-quality-20261031' && contains(github.event.head_commit.message, '[qwen-longchunk-once]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 18
     concurrency:
@@ -145,7 +145,7 @@ jobs:
           modal run modal_qwen_quality_ablation.py \
             --audio "$RUNNER_TEMP/qwen-input/reference.mp3" \
             --eaf "$RUNNER_TEMP/qwen-input/reference.eaf" \
-            --record-id 01 --mode boundary --output "$RUNNER_TEMP/qwen-quality-record01-numeric.json"
+            --record-id 01 --mode longchunk --output "$RUNNER_TEMP/qwen-quality-record01-numeric.json"
       - name: Verify numerical pairing and print metadata only
         run: |
           python - <<'PY'
@@ -154,7 +154,7 @@ jobs:
           x=json.loads(p.read_text())
           assert x["record_id"]=="01"
           assert len(x["conditions"])==2
-          assert [v["boundary_padding_seconds"] for v in x["conditions"]]==[0.0,1.0]
+          assert [v["max_chunk_seconds"] for v in x["conditions"]]==[30,45]
           assert x["conditions"][0]["status"]=="success"
           assert all(math.isfinite(v["inference_and_eval_seconds"]) for v in x["conditions"])
           print("RESEARCH_CONDITION_STATUS",[(v["name"],v["status"],
@@ -162,6 +162,6 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: qwen-boundary-01-numeric-only
+          name: qwen-longchunk-01-numeric-only
           path: ${{ runner.temp }}/qwen-quality-record01-numeric.json
           retention-days: 7

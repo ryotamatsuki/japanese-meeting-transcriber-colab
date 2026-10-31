@@ -44,7 +44,7 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
     from scripts.eval_elan_ja import load_elan
     from scripts.qwen_quality_experiments import (
         edit_components,oracle_exclusive_intervals,diagnose_review_candidates)
-    if record_id not in ("01","05","08") or mode not in ("screen","boundary"):
+    if record_id not in ("01","05","08") or mode not in ("screen","boundary","longchunk"):
         raise ValueError("Unsupported preregistered research record")
     if hashlib.sha256(truth_bytes).hexdigest()!=expected_sha:
         raise ValueError("ELAN reference changed")
@@ -93,7 +93,9 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
         reference_text="".join(x["text"] for x in reference)
         findings=[]
         # Keep baseline first. 45 s can hit token-generation caps: fail is recorded, not suppressed.
-        variants=([(30,0.0),(30,1.0)] if mode=="boundary" else [(30,0.0),(15,0.0),(45,0.0)])
+        variants=([(30,0.0),(30,1.0)] if mode=="boundary" else
+                  [(30,0.0),(45,0.0)] if mode=="longchunk" else
+                  [(30,0.0),(15,0.0),(45,0.0)])
         for seconds,padding in variants:
             name=("candidate_boundary_1s" if padding else
                   "baseline_30" if seconds==30 else "candidate_"+str(seconds))
@@ -122,8 +124,10 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
                     collected.extend(aligned)
                     retries+=meta["retries"]
                 stage="attribution"
-                utterances,integrity=attribute_qwen(collected,automatic,duration)
-                oracle_rows,_=attribute_qwen(collected,oracle,duration)
+                utterances,integrity=attribute_qwen(collected,automatic,duration,
+                                                     max_chunk_seconds=50 if seconds==45 else 38)
+                oracle_rows,_=attribute_qwen(collected,oracle,duration,
+                                               max_chunk_seconds=50 if seconds==45 else 38)
                 all_text="".join(row["text"] for row in collected)
                 # This aggregate CER is time-flattened; the reference contains overlapping
                 # simultaneous talk and is not a clean per-speaker ASR upper bound.

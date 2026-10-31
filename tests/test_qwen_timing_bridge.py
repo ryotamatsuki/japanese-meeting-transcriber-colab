@@ -14,6 +14,20 @@ def sample():
 
 
 class QwenTimingTests(unittest.TestCase):
+    def test_45s_research_chunk_requires_consistent_explicit_limit(self):
+        data=[{'offset_sec':0,'duration_sec':45,'text':'あいうえ',
+               'items':[{'text':c,'start_time':i*10.,'end_time':i*10.+9.}
+                        for i,c in enumerate('あいうえ')]}]
+        diar=[{'start':0,'end':45,'speaker_id':'A'}]
+        with self.assertRaisesRegex(ValueError,'Invalid chunk'):
+            attribute_qwen(data,diar,45)
+        rows,meta=attribute_qwen(data,diar,45,max_chunk_seconds=50)
+        self.assertEqual(meta['aligned_tokens'],4)
+        self.assertEqual(''.join(r['text'] for r in rows),'あいうえ')
+        for limit in (0,51,float('nan')):
+            with self.assertRaises(ValueError):
+                qwen_segments(data,45,max_chunk_seconds=limit)
+
     def test_keeps_normalized_text_and_absolute_time(self):
         seg,metrics=qwen_segments(sample(),6)
         self.assertEqual(metrics['aligned_tokens'],4)
