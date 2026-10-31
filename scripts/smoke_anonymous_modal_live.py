@@ -115,8 +115,8 @@ async def main():
                "audio_bytes": len(audio),
                "both_jobs_submitted": False, "owner_isolation": False,
                "gpu_completed": False, "edit_and_zip": False, "deleted": False}
-    async with httpx.AsyncClient(base_url=url, timeout=90, follow_redirects=False) as a, \\
-               httpx.AsyncClient(base_url=url, timeout=90, follow_redirects=False) as b:
+    async with (httpx.AsyncClient(base_url=url, timeout=90, follow_redirects=False) as a,
+                httpx.AsyncClient(base_url=url, timeout=90, follow_redirects=False) as b):
         csrf_a, csrf_b = await asyncio.gather(establish(a), establish(b))
         check(a.cookies.get("beta_session") != b.cookies.get("beta_session"),
               "Sessions unexpectedly share a cookie")
