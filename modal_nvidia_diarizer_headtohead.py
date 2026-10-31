@@ -17,8 +17,8 @@ image=(modal.Image.debian_slim(python_version="3.12")
     .pip_install("nemo_toolkit[asr]==3.0.0",
                  "pyannote.metrics==4.0.0","soundfile>=0.13.1",
                  "numpy>=1.26.0","rapidfuzz>=3.14.0")
-    .add_local_python_source("scripts","transcriber","beta")
-    .env({"PYANNOTE_METRICS_ENABLED":"0","HF_HUB_DISABLE_TELEMETRY":"1"}))
+    .env({"PYANNOTE_METRICS_ENABLED":"0","HF_HUB_DISABLE_TELEMETRY":"1"})
+    .add_local_python_source("scripts","transcriber","beta"))
 
 
 @app.function(image=image,gpu="A10",cpu=4,memory=20000,
