@@ -88,6 +88,8 @@ def transcribe_job(job_id: str, extension: str, diarization: bool, speakers: int
         job=jobs.get(key) or job
         if job['status']=='deleted':
             return
+        job['finished_at']=time.time()
+        job['gpu_task_seconds']=job['finished_at']-job['started_at']
         job['status']='complete'
         job['utterances']=len(parsed['rows'])
         job['pipeline_seconds']=metrics.get('pipeline_seconds')
