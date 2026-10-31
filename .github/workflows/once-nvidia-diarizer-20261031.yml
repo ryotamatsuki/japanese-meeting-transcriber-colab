@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   matched-real-gpu:
-    if: "github.event.head_commit.message == 'research: one-shot NVIDIA diarizer A10 matched JCre3 experiment'"
+    if: "github.event.head_commit.message == 'research: rerun one-shot NVIDIA diarizer with fixed Modal image'"
     runs-on: ubuntu-latest
     timeout-minutes: 39
     env:
