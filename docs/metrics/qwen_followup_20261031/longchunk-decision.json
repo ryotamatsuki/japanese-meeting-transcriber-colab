@@ -1,0 +1,17 @@
+{
+  "record_id": "01",
+  "experiment_mode": "longchunk",
+  "criterion": "absolute cpCER improvement >=3pp; CER no worse; both succeed",
+  "screening_pass": false,
+  "commercial_ready": false,
+  "commercial_blockers": [
+    "single development recording",
+    "no independent meeting validation",
+    "no measured human correction study"
+  ],
+  "conditions_succeeded": true,
+  "cpcer_improvement_pp": -0.7681228996639422,
+  "cer_change_pp": 1.7762842054728751,
+  "candidate_to_baseline_time_ratio": 0.9728805034014999,
+  "decision": "candidate not adopted: screening criterion unmet"
+}

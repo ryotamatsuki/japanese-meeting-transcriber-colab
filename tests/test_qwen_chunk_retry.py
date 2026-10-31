@@ -1,7 +1,7 @@
 """CPU fixtures for bounded model failover, no Qwen weights or raw audio."""
 import unittest
 from types import SimpleNamespace
-from scripts.qwen_chunk_retry import infer_chunk
+from scripts.qwen_chunk_retry import infer_chunk, AlignmentFailure
 from scripts.evaluate_asr_cer import normalized_ja
 
 
@@ -30,6 +30,48 @@ class QwenChunkRecoveryTests(unittest.TestCase):
         self.assertEqual(len(rows),1)
         self.assertEqual(model.calls,1)
         self.assertEqual(meta['retries'],0)
+
+    def test_research_context_is_optional_and_passed_only_when_provided(self):
+        class Recording(Fake):
+            def __init__(self):
+                super().__init__(20)
+                self.context_seen=None
+            def transcribe(self,*,audio,language,return_time_stamps,context=""):
+                self.context_seen=context
+                return super().transcribe(audio=audio,language=language,
+                                          return_time_stamps=return_time_stamps)
+        model=Recording()
+        infer_chunk(model,bytearray(15*16000),0,context="愛媛県")
+        self.assertEqual(model.context_seen,"愛媛県")
+
+    def test_context_survives_both_branches_at_every_retry_depth(self):
+        class Recording(Fake):
+            def __init__(self):
+                super().__init__(12)
+                self.contexts=[]
+            def transcribe(self,*,audio,language,return_time_stamps,context=""):
+                self.contexts.append(context)
+                return super().transcribe(audio=audio,language=language,
+                                          return_time_stamps=return_time_stamps)
+        model=Recording()
+        rows,meta=infer_chunk(model,bytearray(45*16000),0,
+                             max_chunk_seconds=50,context="愛媛県")
+        self.assertEqual(len(rows),4)
+        self.assertEqual(meta['retries'],3)
+        self.assertEqual(model.contexts,["愛媛県"]*7)
+
+    def test_invalid_context_fails_before_model_call(self):
+        model=Fake(30)
+        with self.assertRaises(ValueError):
+            infer_chunk(model,self.audio,0,context="x"*301)
+        self.assertEqual(model.calls,0)
+
+    def test_45s_requires_explicit_research_limit(self):
+        model=Fake(50)
+        with self.assertRaisesRegex(ValueError,"Invalid audio chunk"):
+            infer_chunk(model,bytearray(45*16000),0)
+        rows,_=infer_chunk(model,bytearray(45*16000),0,max_chunk_seconds=50)
+        self.assertEqual(len(rows),1)
 
     def test_failed_thirty_recovers_at_fifteen(self):
         model=Fake(16)
@@ -85,6 +127,14 @@ class QwenChunkRecoveryTests(unittest.TestCase):
         rows,meta=infer_chunk(model,self.audio,0)
         self.assertEqual(len(rows),2)
         self.assertEqual(meta['retries'],1)
+
+    def test_failure_diagnostic_has_only_code_and_numeric_bounds(self):
+        with self.assertRaises(AlignmentFailure) as raised:
+            infer_chunk(Fake(1),self.audio,100)
+        self.assertEqual(raised.exception.diagnostic,
+                         {'reason':'lexical_mismatch','offset_seconds':100.,
+                          'duration_seconds':7.5})
+        self.assertNotIn('はい',str(raised.exception))
 
     def test_rejects_invalid_bounds(self):
         with self.assertRaises(ValueError):

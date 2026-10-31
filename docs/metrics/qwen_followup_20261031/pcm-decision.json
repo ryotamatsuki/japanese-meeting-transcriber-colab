@@ -1,0 +1,17 @@
+{
+  "record_id": "01",
+  "experiment_mode": "pcm",
+  "criterion": "absolute cpCER improvement >=3pp; CER no worse; both succeed",
+  "screening_pass": false,
+  "commercial_ready": false,
+  "commercial_blockers": [
+    "single development recording",
+    "no independent meeting validation",
+    "no measured human correction study"
+  ],
+  "conditions_succeeded": true,
+  "cpcer_improvement_pp": 0.4560729716754697,
+  "cer_change_pp": 0.12001920307249114,
+  "candidate_to_baseline_time_ratio": 0.9811898983645558,
+  "decision": "candidate not adopted: screening criterion unmet"
+}

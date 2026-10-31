@@ -48,11 +48,16 @@ def _restore_qwen_text_at_aligned_token_boundaries(text: str, items: list[dict])
     return rebuilt,True
 
 
-def qwen_segments(chunks: list[dict], duration: float) -> tuple[list[dict],dict]:
+def qwen_segments(chunks: list[dict], duration: float, *, max_chunk_seconds: float = 38, speech_end_seconds: float | None = None) -> tuple[list[dict],dict]:
+    if not math.isfinite(max_chunk_seconds) or not 3 <= max_chunk_seconds <= 50:
+        raise ValueError("Invalid research chunk limit")
     if not chunks or not (0 < float(duration) <= 3600):
         raise ValueError("Invalid audio or empty Qwen chunks")
     if len(chunks)>240:
         raise ValueError("Too many Qwen chunks")
+    expected_end=float(duration) if speech_end_seconds is None else float(speech_end_seconds)
+    if not math.isfinite(expected_end) or not 0 < expected_end <= duration:
+        raise ValueError("Invalid expected speech boundary")
     result=[]
     words_count=0
     lexical_redistribution_chunks=0
@@ -65,7 +70,7 @@ def qwen_segments(chunks: list[dict], duration: float) -> tuple[list[dict],dict]
         offset=float(chunk['offset_sec'])
         chunk_duration=float(chunk['duration_sec'])
         if not (math.isfinite(offset) and math.isfinite(chunk_duration)
-                and 0 <= offset <= duration and 0 < chunk_duration <= 38
+                and 0 <= offset <= duration and 0 < chunk_duration <= max_chunk_seconds
                 and offset>previous_offset and offset+chunk_duration<=duration+0.8):
             raise ValueError("Invalid chunk offsets / durations")
         previous_offset=offset
@@ -132,20 +137,22 @@ def qwen_segments(chunks: list[dict], duration: float) -> tuple[list[dict],dict]
             'total_recognized_chars':len(joined),'total_aligned_chars':len(aligned)},
             ensure_ascii=False),flush=True)
         raise ValueError("Qwen forced alignment did not preserve all normalized speech characters")
-    if words_count<4 or maximum < 0.8*duration:
+    if words_count<4 or maximum < 0.8*expected_end:
         raise ValueError("Qwen timestamps are missing or do not cover most of recording")
     return result,{'aligned_tokens':words_count,
         'normalized_text_characters':len(joined),
         'text_preserved':True,'final_word_end_seconds':maximum,
-        'chunk_count':len(chunks),
+        'chunk_count':len(chunks),'expected_speech_end_seconds':expected_end,
         'lexical_redistribution_chunks':lexical_redistribution_chunks,
         'tail_timestamp_review_tokens':tail_timestamp_review_tokens}
 
 
-def attribute_qwen(chunks: list[dict], diarization: list[dict], duration: float):
+def attribute_qwen(chunks: list[dict], diarization: list[dict], duration: float, *,
+                   max_chunk_seconds: float = 38, speech_end_seconds: float | None = None):
     if not diarization:
         raise ValueError("Diarization is required")
-    asr_segments, integrity=qwen_segments(chunks,duration)
+    asr_segments, integrity=qwen_segments(chunks,duration,max_chunk_seconds=max_chunk_seconds,
+                                           speech_end_seconds=speech_end_seconds)
     utterances,speaker_map,words=assign_and_group(asr_segments,diarization,True)
     if words != integrity['aligned_tokens']:
         raise ValueError("Word attribution omitted aligned tokens")
