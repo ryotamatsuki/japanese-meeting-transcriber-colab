@@ -95,9 +95,9 @@ jobs:
         run: python scripts/browser_react_stage37_smoke.py
 
   qwen-research-screen-once:
-    name: Qwen 45s bridge limit correction (one-off)
+    name: Qwen source PCM paired comparison (one-off)
     needs: tests
-    if: ${{ github.event_name == 'push' && github.ref_name == 'research/qwen-fixed-weights-quality-20261031' && contains(github.event.head_commit.message, '[qwen-longchunk-once]') }}
+    if: ${{ github.event_name == 'push' && github.ref_name == 'research/qwen-fixed-weights-quality-20261031' && contains(github.event.head_commit.message, '[qwen-pcm-once]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 18
     concurrency:
@@ -138,6 +138,13 @@ jobs:
           subprocess.run(["ffmpeg","-hide_banner","-loglevel","error","-nostdin","-y",
                           "-i",str(wav),"-ar","16000","-ac","1",
                           "-b:a","48k",str(root/"reference.mp3")],check=True)
+          subprocess.run(["ffmpeg","-hide_banner","-loglevel","error","-nostdin","-y",
+                          "-i",str(wav),"-ar","16000","-ac","1",
+                          "-c:a","flac",str(root/"reference.flac")],check=True)
+          import json
+          probe=json.loads(subprocess.check_output(["ffprobe","-v","error","-select_streams","a:0",
+                          "-show_entries","stream=sample_rate,channels","-of","json",str(wav)]))
+          print("SOURCE_AUDIO_FORMAT",probe['streams'][0])
           print("RESEARCH_INPUT_VERIFIED",digest)
           PY
       - name: One isolated A10 invocation, baseline and boundary context
@@ -145,7 +152,7 @@ jobs:
           modal run modal_qwen_quality_ablation.py \
             --audio "$RUNNER_TEMP/qwen-input/reference.mp3" \
             --eaf "$RUNNER_TEMP/qwen-input/reference.eaf" \
-            --record-id 01 --mode longchunk --output "$RUNNER_TEMP/qwen-quality-record01-numeric.json"
+            --record-id 01 --mode pcm --alternative-audio "$RUNNER_TEMP/qwen-input/reference.flac" --output "$RUNNER_TEMP/qwen-quality-record01-numeric.json"
       - name: Verify numerical pairing and print metadata only
         run: |
           python - <<'PY'
@@ -154,7 +161,7 @@ jobs:
           x=json.loads(p.read_text())
           assert x["record_id"]=="01"
           assert len(x["conditions"])==2
-          assert [v["max_chunk_seconds"] for v in x["conditions"]]==[30,45]
+          assert [v["name"] for v in x["conditions"]]==["baseline_30","candidate_lossless_pcm"]
           assert x["conditions"][0]["status"]=="success"
           assert all(math.isfinite(v["inference_and_eval_seconds"]) for v in x["conditions"])
           print("RESEARCH_CONDITION_STATUS",[(v["name"],v["status"],
@@ -162,6 +169,6 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: qwen-longchunk-01-numeric-only
+          name: qwen-pcm-01-numeric-only
           path: ${{ runner.temp }}/qwen-quality-record01-numeric.json
           retention-days: 7

@@ -28,7 +28,7 @@ image=(modal.Image.debian_slim(python_version="3.11")
               max_containers=1,scaledown_window=2,single_use_containers=True,retries=0,
               secrets=[modal.Secret.from_name("transcriber-hf",required_keys=["HF_TOKEN"])])
 def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
-                  record_id:str,mode:str="screen"):
+                  record_id:str,mode:str="screen",alternative_audio_bytes:bytes=b""):
     import hashlib, os, subprocess, tempfile, time
     import numpy as np
     import soundfile as sf
@@ -44,7 +44,7 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
     from scripts.eval_elan_ja import load_elan
     from scripts.qwen_quality_experiments import (
         edit_components,oracle_exclusive_intervals,diagnose_review_candidates)
-    if record_id not in ("01","05","08") or mode not in ("screen","boundary","longchunk"):
+    if record_id not in ("01","05","08") or mode not in ("screen","boundary","longchunk","pcm"):
         raise ValueError("Unsupported preregistered research record")
     if hashlib.sha256(truth_bytes).hexdigest()!=expected_sha:
         raise ValueError("ELAN reference changed")
@@ -66,6 +66,15 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
         signal,sr=sf.read(pcm,dtype="float32",always_2d=False)
         if sr!=16000 or signal.ndim!=1:
             raise ValueError("Not 16k mono")
+        alternative=None
+        if mode=="pcm":
+            if not 0<len(alternative_audio_bytes)<=25*1024*1024:
+                raise ValueError("Unexpected lossless audio size")
+            lossless=root/"alternative.flac"
+            lossless.write_bytes(alternative_audio_bytes)
+            alternative,alternative_sr=sf.read(lossless,dtype="float32",always_2d=False)
+            if alternative_sr!=sr or alternative.ndim!=1 or len(alternative)!=len(signal):
+                raise ValueError("Lossless input must have identical sample count and rate")
         duration=len(signal)/sr
         if not 300<=duration<=1300:
             raise ValueError("Outside bounded pilot duration")
@@ -95,10 +104,13 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
         # Keep baseline first. 45 s can hit token-generation caps: fail is recorded, not suppressed.
         variants=([(30,0.0),(30,1.0)] if mode=="boundary" else
                   [(30,0.0),(45,0.0)] if mode=="longchunk" else
+                  [(30,0.0),(30,0.0)] if mode=="pcm" else
                   [(30,0.0),(15,0.0),(45,0.0)])
-        for seconds,padding in variants:
+        for condition_index,(seconds,padding) in enumerate(variants):
             name=("candidate_boundary_1s" if padding else
                   "baseline_30" if seconds==30 else "candidate_"+str(seconds))
+            if mode=="pcm" and condition_index==1:
+                name="candidate_lossless_pcm"
             item={"max_chunk_seconds":seconds,"boundary_padding_seconds":padding,"name":name}
             begin=time.perf_counter()
             stage="chunking"
@@ -113,6 +125,9 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
                 stage="asr_alignment"
                 for index,(chunk,offset) in enumerate(chunks):
                     core=None
+                    if mode=="pcm" and condition_index==1:
+                        start=round(float(offset)*sr)
+                        chunk=alternative[start:start+len(chunk)]
                     if padding:
                         chunk,offset,core=context_window(signal,float(offset),len(chunk),padding=padding)
                     aligned,meta=infer_chunk(model,np.asarray(chunk,dtype=np.float32),
@@ -167,7 +182,9 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
             item["inference_and_eval_seconds"]=time.perf_counter()-begin
             findings.append(item)
         result={
-          "record_id":record_id,"experiment_mode":mode,"audio_sha256":hashlib.sha256(audio_bytes).hexdigest(),
+          "record_id":record_id,"experiment_mode":mode,
+          "alternative_audio_sha256":hashlib.sha256(alternative_audio_bytes).hexdigest() if alternative_audio_bytes else None,
+          "audio_sha256":hashlib.sha256(audio_bytes).hexdigest(),
           "reference_eaf_sha256":expected_sha,"audio_seconds":duration,
           "reference_characters":len(reference_text),
           "reference_speakers":len(set(x["speaker_id"] for x in reference)),
@@ -187,7 +204,7 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
 
 
 @app.local_entrypoint()
-def main(audio:str,eaf:str,record_id:str,output:str,mode:str="screen"):
+def main(audio:str,eaf:str,record_id:str,output:str,mode:str="screen",alternative_audio:str=""):
     import hashlib,json,datetime, time
     references={
        "01":"c59daa71d0ffa34e50b4c532d33f5c0d2a51ceaa8aea4435a68a87d924f61b32",
@@ -199,7 +216,8 @@ def main(audio:str,eaf:str,record_id:str,output:str,mode:str="screen"):
     human=Path(eaf).read_bytes()
     if hashlib.sha256(human).hexdigest()!=references[record_id]:
        raise ValueError("Unexpected reference SHA")
-    result=screen_record.remote(pcm,human,references[record_id],record_id,mode)
+    alternative=Path(alternative_audio).read_bytes() if alternative_audio else b""
+    result=screen_record.remote(pcm,human,references[record_id],record_id,mode,alternative)
     # Numeric and hashes only. Never return text or raw audio to CI.
     dest=Path(output);dest.parent.mkdir(parents=True,exist_ok=True)
     dest.write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
