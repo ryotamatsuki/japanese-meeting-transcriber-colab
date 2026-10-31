@@ -105,7 +105,9 @@ class FileBackend:
         if self.require_owner:
             job['owner']=owner
         self.state['job:'+id]=job
-        self.state['job_index']=[j['id'] for j in current]+[id]
+        # Keep the global index intact: an owner's filtered list cannot replace it.
+        existing=list(self.state.get('job_index',[])) if self.require_owner else [j['id'] for j in current]
+        self.state['job_index']=existing+[id]
         return job
 
     def append_chunk(self,id,offset,data,*,owner=None):
