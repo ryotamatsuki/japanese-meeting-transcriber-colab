@@ -73,7 +73,9 @@ def process(path, output_root, model_cache, config=None, token=None, stage='full
     if progress:
         progress('preparing')
     if stage != 'diarization':
-        asr_settings = transcribe(job, config, Path(model_cache), metrics, progress=progress)
+        # Keep the original test/CLI processor contract when tracking is off.
+        asr_settings = (transcribe(job, config, Path(model_cache), metrics, progress=progress)
+                        if progress else transcribe(job, config, Path(model_cache), metrics))
     if stage != 'asr':
         if progress:
             progress('diarization')
