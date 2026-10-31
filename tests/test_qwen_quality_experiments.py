@@ -4,7 +4,7 @@ import unittest
 from scripts.qwen_quality_experiments import (
     checked_context, diagnose_review_candidates, oracle_exclusive_intervals,
     edit_components, paired_median_bootstrap, prefer_original_if_uncertain,
-    research_summary, retain_distinct_overlap_tokens,
+    research_summary, retain_distinct_overlap_tokens, build_bounded_review_queue,
 )
 
 
@@ -93,6 +93,19 @@ class QualityResearchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             retain_distinct_overlap_tokens([
                 {"text":"はい","start":1,"end":0,"speaker":"話者1"}])
+
+    def test_review_queue_limits_burden_and_prioritizes_overlap(self):
+        rows=[{"start":i,"end":i+0.5,"text":"はい","speaker":"話者1"}
+              for i in range(20)]
+        flags=[{"index":i,"reasons":["speaker_boundary_review"]} for i in range(20)]
+        flags[-1]["reasons"]=["overlap_speech_review","important_number"]
+        selected=build_bounded_review_queue(rows,flags,max_share=.15)
+        self.assertEqual(len(selected),3)
+        self.assertEqual(selected[0]["utterance_index"],19)
+        self.assertEqual(selected[0]["status"],"要確認")
+        self.assertNotIn("text",selected[0])
+        with self.assertRaises(ValueError):
+            build_bounded_review_queue(rows,[{"index":100,"reasons":["x"]}])
 
     def test_invalid_timing_fail_closed(self):
         with self.assertRaises(ValueError):
