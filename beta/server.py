@@ -7,6 +7,9 @@ import html
 import os
 import time
 import secrets
+import shutil
+import tempfile
+from starlette.background import BackgroundTask
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Response, RedirectResponse
@@ -178,9 +181,11 @@ def create_app(backend, *, password: str | None = None, session_secret: str, ano
             'beta_note':'Machine output; human verification required. Do not upload confidential audio.'}
 
     @app.get('/api/jobs')
-    def jobs(req:Request):
+    async def jobs(req:Request):
         require_auth(req)
-        return {'jobs':[public_job(j) for j in safe(backend.list_jobs,owner=owner_for(req))]}
+        async with lock:
+            found=await asyncio.to_thread(safe,backend.list_jobs,owner=owner_for(req))
+        return {'jobs':[public_job(j) for j in found]}
 
     @app.post('/api/jobs')
     async def create(req:Request):
@@ -191,7 +196,7 @@ def create_app(backend, *, password: str | None = None, session_secret: str, ano
         try:
             data=__import__('json').loads(body)
             async with lock:
-                return public_job(safe(backend.new_job,data['filename'],data['size'],
+                return public_job(await asyncio.to_thread(safe,backend.new_job,data['filename'],data['size'],
                             data.get('diarization',True),data.get('speakers',0),
                             owner=owner_for(req)))
         except (ValueError,KeyError,TypeError):
@@ -207,30 +212,47 @@ def create_app(backend, *, password: str | None = None, session_secret: str, ano
             if len(body)>CHUNK_BYTES:
                 raise HTTPException(413,'Chunk exceeds 4 MiB')
         async with lock:
-            return public_job(safe(backend.append_chunk,id,offset,bytes(body),owner=owner_for(req)))
+            return public_job(await asyncio.to_thread(safe,backend.append_chunk,id,offset,bytes(body),owner=owner_for(req)))
 
     @app.post('/api/jobs/{id}/finish')
     async def finish(req:Request,id:str):
         require_write(req)
         async with lock:
-            return public_job(safe(backend.finish,id,owner=owner_for(req)))
+            return public_job(await asyncio.to_thread(safe,backend.finish,id,owner=owner_for(req)))
 
     @app.get('/api/jobs/{id}')
-    def status(req:Request,id:str):
+    async def status(req:Request,id:str):
         require_auth(req)
-        return public_job(safe(backend.info,id,owner=owner_for(req)))
+        async with lock:
+            return public_job(await asyncio.to_thread(safe,backend.info,id,owner=owner_for(req)))
+
+    def snapshot_audio(id,owner):
+        # Volume.reload rejects open files in *any* concurrent request.
+        # Copy under the shared lock, then stream a request-local snapshot.
+        path=safe(backend.source,id,owner=owner)
+        directory=tempfile.mkdtemp(prefix='kiroku-audio-')
+        target=Path(directory)/('audio'+path.suffix)
+        try:
+            shutil.copyfile(path,target)
+        except BaseException:
+            shutil.rmtree(directory,ignore_errors=True)
+            raise
+        return directory,target
 
     @app.get('/api/jobs/{id}/audio')
-    def audio(req:Request,id:str):
+    async def audio(req:Request,id:str):
         require_auth(req)
-        path=safe(backend.source,id,owner=owner_for(req))
+        async with lock:
+            directory,path=await asyncio.to_thread(snapshot_audio,id,owner_for(req))
         import mimetypes
-        return FileResponse(path,media_type=mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
+        return FileResponse(path,media_type=mimetypes.guess_type(path.name)[0] or 'application/octet-stream',
+                            background=BackgroundTask(shutil.rmtree,directory,ignore_errors=True))
 
     @app.get('/api/jobs/{id}/rows')
-    def rows(req:Request,id:str):
+    async def rows(req:Request,id:str):
         require_auth(req)
-        return {'rows':safe(backend.read_rows,id,owner=owner_for(req))}
+        async with lock:
+            return {'rows':await asyncio.to_thread(safe,backend.read_rows,id,owner=owner_for(req))}
 
     @app.put('/api/jobs/{id}/rows')
     async def save(req:Request,id:str):
@@ -241,14 +263,15 @@ def create_app(backend, *, password: str | None = None, session_secret: str, ano
         try:
             data=__import__('json').loads(content)
             async with lock:
-                return {'rows':safe(backend.save_rows,id,data['rows'],owner=owner_for(req))}
+                return {'rows':await asyncio.to_thread(safe,backend.save_rows,id,data['rows'],owner=owner_for(req))}
         except (KeyError,ValueError,TypeError):
             raise HTTPException(400,'Invalid transcript payload') from None
 
     @app.get('/api/jobs/{id}/review')
-    def get_review(req:Request,id:str):
+    async def get_review(req:Request,id:str):
         require_auth(req)
-        return safe(backend.review_windows,id,owner=owner_for(req))
+        async with lock:
+            return await asyncio.to_thread(safe,backend.review_windows,id,owner=owner_for(req))
 
     @app.put('/api/jobs/{id}/review/{window_id}')
     async def set_review(req:Request,id:str,window_id:str):
@@ -263,12 +286,13 @@ def create_app(backend, *, password: str | None = None, session_secret: str, ano
         except (ValueError,TypeError,KeyError):
             raise HTTPException(400,'Invalid review flag') from None
         async with lock:
-            return safe(backend.set_reviewed,id,window_id,body['reviewed'],owner=owner_for(req))
+            return await asyncio.to_thread(safe,backend.set_reviewed,id,window_id,body['reviewed'],owner=owner_for(req))
 
     @app.get('/api/jobs/{id}/download')
-    def download(req:Request,id:str):
+    async def download(req:Request,id:str):
         require_auth(req)
-        payload=safe(backend.get_download,id,owner=owner_for(req))
+        async with lock:
+            payload=await asyncio.to_thread(safe,backend.get_download,id,owner=owner_for(req))
         return Response(payload,media_type='application/zip',headers={
             'Content-Disposition':'attachment; filename="transcript_edits.zip"'})
 
@@ -276,7 +300,7 @@ def create_app(backend, *, password: str | None = None, session_secret: str, ano
     async def delete(req:Request,id:str):
         require_write(req)
         async with lock:
-            safe(backend.delete,id,owner=owner_for(req))
+            await asyncio.to_thread(safe,backend.delete,id,owner=owner_for(req))
         return {'ok':True}
 
     return app
