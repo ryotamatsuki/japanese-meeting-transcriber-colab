@@ -51,7 +51,7 @@ def evaluate_models():
         if (pin["pin"]!=source[rid]["audio_sha256"] or
             pin["reference_chars"]<500):
             raise ValueError("Input was not original pinned dataset")
-        if not 0<audio.stat().st_size<16*1024*1024:
+        if not 0<audio.stat().st_size<32*1024*1024:
             raise ValueError("Audio missing or too large")
         from scripts.evaluate_asr_cer import normalized_ja
         from scripts.qwen_error_decomposition import extract_words
