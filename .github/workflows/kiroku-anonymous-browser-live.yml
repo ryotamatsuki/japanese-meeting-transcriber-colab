@@ -1,0 +1,58 @@
+name: Kiroku anonymous Studio - real Chromium desktop and mobile GPU E2E
+on:
+  push:
+    branches: [feature/kiroku-anonymous-isolation-20261031]
+    paths: [.github/workflows/kiroku-anonymous-browser-live.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kiroku-anonymous-live-deploy
+  cancel-in-progress: false
+jobs:
+  browser_live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      KIROKU_BUDGET_VERIFIED: ${{ vars.KIROKU_BUDGET_VERIFIED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Enforce explicitly verified budget gate
+        run: test "$KIROKU_BUDGET_VERIFIED" = yes
+      - name: Install browser test dependencies
+        run: |
+          python -m pip install modal==1.4.3 playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Resolve existing anonymous endpoint without redeploying other apps
+        id: endpoint
+        run: |
+          python - <<'PY'
+          import os,modal
+          url=modal.Function.from_name('kiroku-anonymous-studio-beta','anonymous_web').get_web_url()
+          if not url or not url.startswith('https://') or not url.endswith('.modal.run'):
+              raise SystemExit('Missing deployed anonymous endpoint')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: print('url='+url,file=f)
+          PY
+      - name: Prepare two distinct permitted Japanese audio inputs
+        run: |
+          mkdir -p local_audio
+          curl --fail --location --silent --show-error --max-time 60 'https://upload.wikimedia.org/wikipedia/commons/6/63/Ja-LessonIntroKonPron-practice1.ogg' -o local_audio/public-domain-a.ogg
+          ffmpeg -v error -i local_audio/public-domain-a.ogg -ss 8 -t 12 -c:a libvorbis local_audio/public-domain-b.ogg
+      - name: UI uploads, real GPU, owner isolation, edit, playback, ZIP and delete
+        env:
+          KIROKU_TEST_URL: ${{ steps.endpoint.outputs.url }}
+          KIROKU_TEST_AUDIO_A: local_audio/public-domain-a.ogg
+          KIROKU_TEST_AUDIO_B: local_audio/public-domain-b.ogg
+        run: python scripts/browser_anonymous_modal_live.py
+      - name: Upload sanitised browser evidence only
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anonymous-studio-browser-sanitized
+          path: local_runs/browser-anonymous/
+          retention-days: 7
