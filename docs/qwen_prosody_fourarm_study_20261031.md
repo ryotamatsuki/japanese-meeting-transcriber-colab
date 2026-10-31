@@ -125,6 +125,29 @@ the editor row, that recording is marked unavailable for splits.
 Any ELAN-derived split labels are still provisional. No real listening
 adjudication has yet taken place.
 
+## Completed real J-CRe3 A10 evidence
+
+### Frozen first-stage replication
+
+[Join-only full real-audio workflow 41184183108](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41184183108) **PASS** for all three recordings, 83.415 seconds inside GPU function. Qwen3-ASR/ForcedAligner/Community-1 first-stage scores independently replicated previous PR #6 cpCER (51.402%, 44.850%, 41.137%). Only **4 eligible joins** remained across 43 predicted utterances (per-record 2/0/2); only **2** had unambiguous ELAN proxy labels. All arms retained these boundaries. A legitimate statistical claim of improvement is impossible; the candidate design is too restrictive, and the output rows may already be over-grouped.
+
+### Merge AND split: separate actual model runs
+
+[Final real-audio merge/split A10 workflow 41184510736](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41184510736) **PASS for all 3 recordings**, with verified original audio SHA and reference SHA, 117.615 seconds inside the GPU function. First-stage and second-stage model load times 8.355 seconds and 4.307 seconds respectively. Completed numeric-only CI checks and private input deletion both succeeded.
+
+Separate split-only candidate selection used exact Qwen ForcedAligner word timestamps and a fixed per-record cap of 16 candidates, including a random sample of ordinary nonpunctuation control boundaries. The resulting **45 candidate word boundaries** had 17 provisional ELAN proxy positive split labels and 28 proxy keep labels (not independently adjudicated gold):
+
+| Arm | Proxy correct splits out of 17 | Proxy false splits out of 28 | Missed proxy splits |
+|---|---:|---:|---:|
+| A: no changes | 0 | 0 | 17 |
+| B: punctuation/pause rules | 10 | 4 | 7 |
+| C: Qwen text | 4 | 7 | 13 |
+| D: measured audio RMS/gap + Qwen | 15 | 14 | 2 |
+
+D increased recall but caused high false splitting. C was worse than B on both true and false splits. There is **no case for unattended automatic edits**. The samples are developmental, and these ELAN proxy labels may be wrong if text timing or UI boundary semantics differ from annotations. Recording-level confidence intervals and human editing-time savings cannot be established from these three acted dialogues.
+
+**No-Go decision:** the production Kiroku Studio stays unchanged; keep model suggestions review-only. For a useful next-stage test, acquire new permission-cleared actual meetings, prepare independent audio-listening adjudication for each eligible boundary, measure human edit time and residual mistakes, then use a pre-specified false-split ceiling to select a strategy rather than tuning to the three development recordings.
+
 ## Research-only modules
 
 - `scripts/qwen_boundary_fourarm.py`: candidate universe, RMS, strict actions,
