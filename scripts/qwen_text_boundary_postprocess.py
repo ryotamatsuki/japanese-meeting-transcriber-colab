@@ -230,8 +230,11 @@ def run_second_pass(rows: list[dict], inference: Callable[[list[dict]], str],
                                {tuple(p) for p in b["allowed_split_after_word"]})
             merges.extend(mm)
             splits.extend(ss)
+        if not merges and not splits:
+            return {"status": "unchanged", "rows": original,
+                    "merge_count": 0, "split_count": 0, "batches": len(request_batches)}
         updated = apply_checked(original, merges, splits)
-    except (ValueError, TypeError, KeyError, json.JSONDecodeError, TimeoutError, OSError):
+    except Exception:
         return {"status": "rejected_preserved_original", "rows": original,
                 "merge_count": 0, "split_count": 0, "batches": len(request_batches)}
     return {"status": "proposed_review_only" if (merges or splits) else "unchanged",
