@@ -20,11 +20,11 @@ jobs:
       - name: Run all offline regression and beta integration tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Verify Modal SDK decorators and deployment module import
-        run: python -c 'import beta_modal; assert beta_modal.app is not None'
+        run: python -c 'import beta_modal, beta_modal_anonymous; assert beta_modal.app is not None and beta_modal_anonymous.app is not None'
       - name: Verify beta browser JavaScript syntax
         run: node --check beta/site.js
       - name: Verify Python syntax
-        run: python -m compileall -q beta beta_modal.py transcriber
+        run: python -m compileall -q beta beta_modal.py beta_modal_anonymous.py transcriber
   react-build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
