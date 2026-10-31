@@ -1,4 +1,4 @@
-name: Modal anonymous Studio - isolated two-client live validation
+name: Modal anonymous Studio - isolated deployment
 on:
   push:
     branches:
@@ -75,20 +75,17 @@ jobs:
               print('url='+url,file=f)
           print('Anonymous Modal endpoint deployment detected.')
           PY
-      - name: Download permitted, public-domain Japanese speech test audio
-        shell: bash
-        run: |
-          mkdir -p local_audio
-          curl --fail --location --retry 3 --silent --show-error --max-time 60 \
-            'https://upload.wikimedia.org/wikipedia/commons/6/63/Ja-LessonIntroKonPron-practice1.ogg' \
-            --output local_audio/public_domain_japanese_speech.ogg
-          test "$(stat -c %s local_audio/public_domain_japanese_speech.ogg)" -gt 1000
-      - name: Concurrent isolated browser-session API + actual GPU + edited ZIP test
-        shell: bash
+      - name: Verify anonymous Studio is reachable without spending GPU quota
         env:
           KIROKU_TEST_URL: ${{ steps.deploy.outputs.url }}
-          KIROKU_TEST_AUDIO: local_audio/public_domain_japanese_speech.ogg
-        run: python scripts/smoke_anonymous_modal_live.py
+        run: |
+          python - <<'PY'
+          import httpx,os
+          with httpx.Client(base_url=os.environ['KIROKU_TEST_URL'],timeout=90) as c:
+              assert c.get('/').status_code==200
+              assert c.get('/api/session').json()['anonymous'] is True
+          print('Anonymous Studio session bootstrap PASS; GPU browser acceptance is separate.')
+          PY
       - name: Stop anonymous app if validation failed after deployment
         if: failure()
         shell: bash
@@ -103,5 +100,5 @@ jobs:
           TEST_URL: ${{ steps.deploy.outputs.url }}
         run: |
           echo "Validated live Studio URL: $TEST_URL" >> "$GITHUB_STEP_SUMMARY"
-          echo "Two independent HTTP clients; two real-audio A10 jobs; both ZIPs verified." >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployment and anonymous session bootstrap only; see separate Chromium live acceptance." >> "$GITHUB_STEP_SUMMARY"
           echo "Physical PC/phone testing remains separate." >> "$GITHUB_STEP_SUMMARY"
