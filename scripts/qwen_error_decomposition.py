@@ -326,7 +326,8 @@ def main():
     raw = json.loads(a.qwen.read_text(encoding="utf-8"))
     segments, integrity = qwen_segments(raw["chunks"], raw["duration_seconds"],
         speech_end_seconds=raw.get("speech_end_seconds"))
-    segments = mark_qwen_timing_origins(raw["chunks"], segments, raw["duration_seconds"])\n    exclusive = _read_segments(a.exclusive)
+    segments = mark_qwen_timing_origins(raw["chunks"], segments, raw["duration_seconds"])
+    exclusive = _read_segments(a.exclusive)
     regular = _read_segments(a.regular) if a.regular else None
     result = compare_arms(reference, segments, exclusive, regular=regular, oracle=True)
     result["reference_sha256"] = reference_sha
@@ -335,7 +336,8 @@ def main():
         alt = json.loads(a.timing_alternative.read_text(encoding="utf-8"))
         alt_segments, _ = qwen_segments(alt["chunks"], alt["duration_seconds"],
             speech_end_seconds=alt.get("speech_end_seconds"))
-        alt_segments = mark_qwen_timing_origins(alt["chunks"], alt_segments, alt["duration_seconds"])\n        result["timing_comparison"] = compare_frozen_timing(reference, segments, alt_segments, exclusive)
+        alt_segments = mark_qwen_timing_origins(alt["chunks"], alt_segments, alt["duration_seconds"])
+        result["timing_comparison"] = compare_frozen_timing(reference, segments, alt_segments, exclusive)
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"reference_sha256": reference_sha, "word_count": result["word_count"],
