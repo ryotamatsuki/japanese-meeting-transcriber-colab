@@ -1,10 +1,5 @@
 name: Modal anonymous Studio - isolated deployment
 on:
-  push:
-    branches:
-      - feature/kiroku-anonymous-isolation-20261031
-    paths:
-      - .github/workflows/kiroku-anonymous-live.yml
   workflow_dispatch:
 permissions:
   contents: read
