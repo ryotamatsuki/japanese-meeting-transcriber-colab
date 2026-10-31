@@ -1,6 +1,11 @@
 name: Modal anonymous Studio - isolated deployment
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/kiroku-consecutive-speaker-paragraphs-20261101
+    paths:
+      - .github/workflows/kiroku-anonymous-live.yml
 permissions:
   contents: read
 concurrency:
@@ -8,6 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy_and_smoke:
+    if: "github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'deploy: publish speaker-paragraph UI by existing Modal production workflow'"
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -75,18 +81,36 @@ jobs:
           KIROKU_TEST_URL: ${{ steps.deploy.outputs.url }}
         run: |
           python - <<'PY'
-          import httpx,os
-          with httpx.Client(base_url=os.environ['KIROKU_TEST_URL'],timeout=90) as c:
-              assert c.get('/').status_code==200
+          import httpx,os,re
+          with httpx.Client(base_url=os.environ['KIROKU_TEST_URL'],timeout=120) as c:
+              response=c.get('/')
+              assert response.status_code==200
               assert c.get('/api/session').json()['anonymous'] is True
-          print('Anonymous Studio session bootstrap PASS; GPU browser acceptance is separate.')
+              found=re.findall(r'/ui/assets/[^"\\s<>]+\\.js',response.text)
+              assert found, 'Live page did not reference expected JS'
+              assets=[]
+              for url in set(found):
+                  js=c.get(url)
+                  assert js.status_code==200,(url,js.status_code)
+                  assets.append(js.text)
+              combined=''.join(assets)
+              assert '同じ話者をまとめて読む' in combined,'New grouping UI not on LIVE endpoint'
+              assert '発言単位で編集' in combined,'Editable original rows not in LIVE bundle'
+              assert c.get('/api/jobs').status_code==200,'Anonymous owner-scoped jobs API failed'
+          print('LIVE_BUNDLE_SPEAKER_PARAGRAPHS_AND_ANONYMOUS_SESSION=PASS')
           PY
-      - name: Stop anonymous app if validation failed after deployment
+      - name: Restore last validated public anonymous Studio if postdeploy checks fail
         if: failure()
         shell: bash
         run: |
           if [[ -f "$RUNNER_TEMP/kiroku-deployed" ]] && [[ -n "${MODAL_TOKEN_ID:-}" ]]; then
-            modal app stop --yes kiroku-anonymous-studio-beta || true
+            echo "::warning::Live verification failed; restoring the previous validated anonymous Studio from pinned Git commit"
+            git fetch --depth=1 origin 13ee84c06fa3da6339995e3f6929467ae78417e0
+            git checkout --detach 13ee84c06fa3da6339995e3f6929467ae78417e0
+            npm ci --no-audit --no-fund --prefix frontend
+            npm run build --prefix frontend
+            modal deploy beta_modal_anonymous.py
+            echo "ROLLBACK_TO_PRIOR_STUDIO_COMPLETED=yes"
           fi
       - name: Publish non-sensitive endpoint verification summary
         if: success()
