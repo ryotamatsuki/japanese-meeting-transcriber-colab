@@ -6,6 +6,7 @@ on:
 permissions:
   contents: read
   actions: read
+  checks: read
 jobs:
   inspect:
     if: github.event.pull_request.number == 10
@@ -43,6 +44,9 @@ jobs:
           print("ONE_SHOT_RUN",json.dumps(
               {k:run.get(k) for k in ("id","status","conclusion","html_url")}
               if run else {"found":False}))
+          if run and run.get("conclusion")=="failure":
+              checks=json.loads(subprocess.check_output(["gh","api","-X","GET",f"repos/{repo}/commits/{want}/check-runs"],text=True))
+              print("SOURCE_CHECK_RUNS",json.dumps([{k:x.get(k) for k in ("name","status","conclusion","html_url")} | {"message":x.get("output",{}).get("summary","")[:350]} for x in checks.get("check_runs",[])],ensure_ascii=False))
           if not run or run.get("conclusion")!="success":
               print("NO_MEASURED_SUCCESS")
               raise SystemExit()
