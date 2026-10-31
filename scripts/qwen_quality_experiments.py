@@ -136,6 +136,36 @@ def prefer_original_if_uncertain(original, alternative, *, validated):
     return original, "review_alternative_only"
 
 
+
+def retain_distinct_overlap_tokens(tokens, *, tolerance_sec=0.12):
+    """Conservative boundary overlap reconciliation for research-only hypotheses.
+
+    Only drop exact duplicate normalized text with near-identical timestamps
+    and the SAME speaker. Keep different simultaneous utterances and repeated
+    backchannels. Record dropped count; never infer omissions from this function.
+    """
+    if not 0 <= tolerance_sec <= 0.25:
+        raise ValueError("Unbounded duplicate matching tolerance")
+    result = []
+    removed = 0
+    for raw in tokens:
+        item = dict(raw)
+        start, end = float(item["start"]),float(item["end"])
+        if not (math.isfinite(start) and math.isfinite(end) and 0 <= start <= end):
+            raise ValueError("Invalid overlapping token timing")
+        duplicate = any(
+            normalized_ja(str(old["text"])) == normalized_ja(str(item["text"]))
+            and normalized_ja(str(item["text"])) != ""
+            and old.get("speaker")==item.get("speaker")
+            and abs(float(old["start"])-start)<=tolerance_sec
+            and abs(float(old["end"])-end)<=tolerance_sec
+            for old in result[-8:])
+        if duplicate:
+            removed += 1
+        else:
+            result.append(item)
+    return result,removed
+
 def research_summary(records):
     """Keep artifact numeric-only; reject accidental transcript fields."""
     deny=("text","transcript","speaker_name","audio","filename","path","context","token",
