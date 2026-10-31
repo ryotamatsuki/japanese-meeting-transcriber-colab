@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   probe:
-    if: "github.event.head_commit.message == 'research: run Nemotron3 synthetic loader probe once'"
+    if: "github.event.head_commit.message == 'research: retry Nemotron3 synthetic GPU loader without accelerate'"
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
