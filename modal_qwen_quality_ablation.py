@@ -208,7 +208,7 @@ def main(audio:str,eaf:str,record_id:str,output:str,mode:str="screen",alternativ
     import hashlib,json,datetime, time
     references={
        "01":"c59daa71d0ffa34e50b4c532d33f5c0d2a51ceaa8aea4435a68a87d924f61b32",
-       "05":"e728b5e9cc74c91dfc2541dee1a404f98e3ff1b71b744512e4622d57a7",
+       "05":"e728b5e9cc74c91dfc2541dee1a404f98e3ff1b71b744512e4622d57a1dd5bdd",
        "08":"36aaf89d33163770e0cbf8310245437a1d9da5f4d779416e2507917a1547392c"}
     if record_id not in references:
        raise ValueError("Record ID not preregistered")
