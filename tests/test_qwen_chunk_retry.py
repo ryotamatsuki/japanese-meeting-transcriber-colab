@@ -44,6 +44,28 @@ class QwenChunkRecoveryTests(unittest.TestCase):
         infer_chunk(model,bytearray(15*16000),0,context="愛媛県")
         self.assertEqual(model.context_seen,"愛媛県")
 
+    def test_context_survives_both_branches_at_every_retry_depth(self):
+        class Recording(Fake):
+            def __init__(self):
+                super().__init__(12)
+                self.contexts=[]
+            def transcribe(self,*,audio,language,return_time_stamps,context=""):
+                self.contexts.append(context)
+                return super().transcribe(audio=audio,language=language,
+                                          return_time_stamps=return_time_stamps)
+        model=Recording()
+        rows,meta=infer_chunk(model,bytearray(45*16000),0,
+                             max_chunk_seconds=50,context="愛媛県")
+        self.assertEqual(len(rows),4)
+        self.assertEqual(meta['retries'],3)
+        self.assertEqual(model.contexts,["愛媛県"]*7)
+
+    def test_invalid_context_fails_before_model_call(self):
+        model=Fake(30)
+        with self.assertRaises(ValueError):
+            infer_chunk(model,self.audio,0,context="x"*301)
+        self.assertEqual(model.calls,0)
+
     def test_45s_requires_explicit_research_limit(self):
         model=Fake(50)
         with self.assertRaisesRegex(ValueError,"Invalid audio chunk"):

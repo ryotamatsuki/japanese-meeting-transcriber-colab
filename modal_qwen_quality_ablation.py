@@ -24,7 +24,7 @@ image=(modal.Image.debian_slim(python_version="3.11")
 
 
 @app.function(image=image,gpu="A10",cpu=2,memory=8192,
-              volumes={"/models":weights},timeout=1800,
+              volumes={"/models":weights},timeout=600,
               max_containers=1,scaledown_window=2,single_use_containers=True,retries=0,
               secrets=[modal.Secret.from_name("transcriber-hf",required_keys=["HF_TOKEN"])])
 def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
@@ -38,12 +38,13 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
     from transcriber.processor import Config
     from transcriber.diarization import diarize
     from scripts.qwen_chunk_retry import infer_chunk
+    from scripts.qwen_boundary_context import context_window, own_aligned_tokens
     from scripts.qwen_timing_bridge import attribute_qwen
     from scripts.evaluate_attributed_transcript import permutation_cer
     from scripts.eval_elan_ja import load_elan
     from scripts.qwen_quality_experiments import (
         edit_components,oracle_exclusive_intervals,diagnose_review_candidates)
-    if record_id not in ("01","05","08") or mode!="screen":
+    if record_id not in ("01","05","08") or mode not in ("screen","boundary"):
         raise ValueError("Unsupported preregistered research record")
     if hashlib.sha256(truth_bytes).hexdigest()!=expected_sha:
         raise ValueError("ELAN reference changed")
@@ -92,9 +93,13 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
         reference_text="".join(x["text"] for x in reference)
         findings=[]
         # Keep baseline first. 45 s can hit token-generation caps: fail is recorded, not suppressed.
-        for seconds in (30,15,45):
-            item={"max_chunk_seconds":seconds,"name":"baseline_30" if seconds==30 else "candidate_"+str(seconds)}
+        variants=([(30,0.0),(30,1.0)] if mode=="boundary" else [(30,0.0),(15,0.0),(45,0.0)])
+        for seconds,padding in variants:
+            name=("candidate_boundary_1s" if padding else
+                  "baseline_30" if seconds==30 else "candidate_"+str(seconds))
+            item={"max_chunk_seconds":seconds,"boundary_padding_seconds":padding,"name":name}
             begin=time.perf_counter()
+            stage="chunking"
             try:
                 chunks=split_audio_into_chunks(np.asarray(signal,dtype=np.float32),
                     sr=16000,max_chunk_sec=float(seconds))
@@ -102,17 +107,27 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
                     raise ValueError("Invalid chunk count")
                 collected=[]
                 retries=0
-                for chunk,offset in chunks:
+                discarded=0
+                stage="asr_alignment"
+                for index,(chunk,offset) in enumerate(chunks):
+                    core=None
+                    if padding:
+                        chunk,offset,core=context_window(signal,float(offset),len(chunk),padding=padding)
                     aligned,meta=infer_chunk(model,np.asarray(chunk,dtype=np.float32),
                         float(offset),max_retries=2,
                         max_chunk_seconds=50 if seconds==45 else 38)
+                    if core is not None:
+                        aligned,count=own_aligned_tokens(aligned,core,final=index==len(chunks)-1)
+                        discarded+=count
                     collected.extend(aligned)
                     retries+=meta["retries"]
+                stage="attribution"
                 utterances,integrity=attribute_qwen(collected,automatic,duration)
                 oracle_rows,_=attribute_qwen(collected,oracle,duration)
                 all_text="".join(row["text"] for row in collected)
                 # This aggregate CER is time-flattened; the reference contains overlapping
                 # simultaneous talk and is not a clean per-speaker ASR upper bound.
+                stage="evaluation"
                 cer=edit_components(reference_text,all_text)
                 cpcer=permutation_cer(reference,utterances)
                 oracle_cpcer=permutation_cer(reference,oracle_rows)
@@ -120,6 +135,7 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
                 item.update({
                   "status":"success",
                   "chunks":len(chunks),
+                  "context_tokens_outside_core":discarded,
                   "bounded_retry_count":retries,
                   "cpcer":cpcer["cpcer"],
                   "cpcer_edits":cpcer["edit_distance"],
@@ -143,10 +159,11 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
                 # Exception content might contain transcribed speech; do not log.
                 item["status"]="failed"
                 item["error_class"]=type(exc).__name__
+                item["failure_stage"]=stage
             item["inference_and_eval_seconds"]=time.perf_counter()-begin
             findings.append(item)
         result={
-          "record_id":record_id,"audio_sha256":hashlib.sha256(audio_bytes).hexdigest(),
+          "record_id":record_id,"experiment_mode":mode,"audio_sha256":hashlib.sha256(audio_bytes).hexdigest(),
           "reference_eaf_sha256":expected_sha,"audio_seconds":duration,
           "reference_characters":len(reference_text),
           "reference_speakers":len(set(x["speaker_id"] for x in reference)),
@@ -166,7 +183,7 @@ def screen_record(audio_bytes:bytes,truth_bytes:bytes,expected_sha:str,
 
 
 @app.local_entrypoint()
-def main(audio:str,eaf:str,record_id:str,output:str):
+def main(audio:str,eaf:str,record_id:str,output:str,mode:str="screen"):
     import hashlib,json,datetime, time
     references={
        "01":"c59daa71d0ffa34e50b4c532d33f5c0d2a51ceaa8aea4435a68a87d924f61b32",
@@ -178,7 +195,7 @@ def main(audio:str,eaf:str,record_id:str,output:str):
     human=Path(eaf).read_bytes()
     if hashlib.sha256(human).hexdigest()!=references[record_id]:
        raise ValueError("Unexpected reference SHA")
-    result=screen_record.remote(pcm,human,references[record_id],record_id)
+    result=screen_record.remote(pcm,human,references[record_id],record_id,mode)
     # Numeric and hashes only. Never return text or raw audio to CI.
     dest=Path(output);dest.parent.mkdir(parents=True,exist_ok=True)
     dest.write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")

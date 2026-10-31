@@ -93,3 +93,75 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Verify desktop and smartphone copy, formats and clipboard fallback
         run: python scripts/browser_react_stage37_smoke.py
+
+  qwen-research-screen-once:
+    name: Qwen boundary context paired comparison (one-off)
+    needs: tests
+    if: ${{ github.event_name == 'push' && github.ref_name == 'research/qwen-fixed-weights-quality-20261031' && contains(github.event.head_commit.message, '[qwen-boundary-once]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    concurrency:
+      group: kiroku-qwen-boundary-pilot-01
+      cancel-in-progress: false
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      KIROKU_BUDGET_VERIFIED: ${{ vars.KIROKU_BUDGET_VERIFIED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Budget and credentials fail-closed (no settings mutation)
+        run: |
+          if [[ -z "${MODAL_TOKEN_ID:-}" || -z "${MODAL_TOKEN_SECRET:-}" || "${KIROKU_BUDGET_VERIFIED:-}" != yes ]]; then
+            echo "::error::GPU pilot blocked without credentials and operator budget flag"
+            exit 2
+          fi
+      - name: Fetch only public noncommercial evaluation sample
+        run: |
+          sudo apt-get -qq update && sudo apt-get install -y -qq ffmpeg
+          python -m pip install modal==1.4.3 huggingface-hub==0.36.0
+          python - <<'PY'
+          import hashlib,os,pathlib,subprocess
+          from huggingface_hub import hf_hub_download
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])/"qwen-input"
+          root.mkdir()
+          repo="IngCrowd/japanese-themed-dialogue"
+          source="japanese-themed-dialogue01/japanese-themed-dialogue01"
+          wav=hf_hub_download(repo_id=repo,repo_type="dataset",filename=source+"_audio.wav")
+          eaf=hf_hub_download(repo_id=repo,repo_type="dataset",filename=source+".eaf")
+          reference=pathlib.Path(eaf).read_bytes()
+          digest=hashlib.sha256(reference).hexdigest()
+          assert digest=="c59daa71d0ffa34e50b4c532d33f5c0d2a51ceaa8aea4435a68a87d924f61b32"
+          (root/"reference.eaf").write_bytes(reference)
+          subprocess.run(["ffmpeg","-hide_banner","-loglevel","error","-nostdin","-y",
+                          "-i",str(wav),"-ar","16000","-ac","1",
+                          "-b:a","48k",str(root/"reference.mp3")],check=True)
+          print("RESEARCH_INPUT_VERIFIED",digest)
+          PY
+      - name: One isolated A10 invocation, baseline and boundary context
+        run: |
+          modal run modal_qwen_quality_ablation.py \
+            --audio "$RUNNER_TEMP/qwen-input/reference.mp3" \
+            --eaf "$RUNNER_TEMP/qwen-input/reference.eaf" \
+            --record-id 01 --mode boundary --output "$RUNNER_TEMP/qwen-quality-record01-numeric.json"
+      - name: Verify numerical pairing and print metadata only
+        run: |
+          python - <<'PY'
+          import json,os,pathlib,math
+          p=pathlib.Path(os.environ["RUNNER_TEMP"])/"qwen-quality-record01-numeric.json"
+          x=json.loads(p.read_text())
+          assert x["record_id"]=="01"
+          assert len(x["conditions"])==2
+          assert [v["boundary_padding_seconds"] for v in x["conditions"]]==[0.0,1.0]
+          assert x["conditions"][0]["status"]=="success"
+          assert all(math.isfinite(v["inference_and_eval_seconds"]) for v in x["conditions"])
+          print("RESEARCH_CONDITION_STATUS",[(v["name"],v["status"],
+            round(v.get("cpcer",-1)*100,3)) for v in x["conditions"]])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qwen-boundary-01-numeric-only
+          path: ${{ runner.temp }}/qwen-quality-record01-numeric.json
+          retention-days: 7

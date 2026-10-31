@@ -22,9 +22,9 @@ def infer_chunk(model, waveform, offset, *, sample_rate=16000, max_retries=2,
         raise ValueError('Invalid audio chunk bounds')
     if type(max_retries) is not int or not 0<=max_retries<=2:
         raise ValueError('Retry bound exceeded')
+    from scripts.qwen_quality_experiments import checked_context
+    context=checked_context(context)
     try:
-        from scripts.qwen_quality_experiments import checked_context
-        context=checked_context(context)
         kwargs={'audio':(waveform,16000),'language':'Japanese',
                 'return_time_stamps':True}
         if context:
@@ -66,7 +66,8 @@ def infer_chunk(model, waveform, offset, *, sample_rate=16000, max_retries=2,
                                 sample_rate=sample_rate,max_retries=max_retries-1,
                                  max_chunk_seconds=max_chunk_seconds,context=context)
         right,meta_r=infer_chunk(model,waveform[cut:],offset+cut/sample_rate,
-                                 sample_rate=sample_rate,max_retries=max_retries-1)
+                                 sample_rate=sample_rate,max_retries=max_retries-1,
+                                 max_chunk_seconds=max_chunk_seconds,context=context)
         return left+right,{
             'retries':meta_l['retries']+meta_r['retries']+1,
             'lexical_repair':meta_l['lexical_repair']+meta_r['lexical_repair']}
