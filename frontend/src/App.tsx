@@ -38,6 +38,8 @@ function hhmmss(v: number | null | undefined) {
 }
 function mb(v: number) { return (v / 1048576).toFixed(1) + ' MB' }
 function speakerColor(name: string) {
+  const letter = name.trim().match(/(?:話者)?([A-E])$/i)
+  if (letter) return 'color-' + 'ABCDE'.indexOf(letter[1].toUpperCase())
   let hash = 0
   for (const code of name) hash = (hash * 31 + code.charCodeAt(0)) % 5
   return 'color-' + hash
@@ -104,6 +106,10 @@ export default function App() {
     void initialize()
     return () => { mounted = false }
   }, [refresh])
+  useEffect(() => {
+    // The edit workspace must open at the top, not preserve a long dashboard's scroll position.
+    window.scrollTo({top:0,behavior:'instant'})
+  }, [selected?.id])
   useEffect(() => {
     if (!ready) return
     const timer = window.setInterval(() => { void refresh().catch(() => {}) }, 10000)

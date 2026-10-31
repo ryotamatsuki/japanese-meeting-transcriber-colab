@@ -81,3 +81,25 @@
   .editor-page .audio-dock{bottom:4px}
 }
 @media(prefers-reduced-motion:reduce){.editor-page *{scroll-behavior:auto!important;transition:none!important}}
+
+/* Studio is a workstation: navigation and player remain reachable while editing long transcripts. */
+@media(min-width:751px){
+  .sidebar{position:fixed;top:0;left:0;bottom:0;height:100dvh}
+  .app-content{margin-left:254px}
+}
+@media(min-width:751px) and (max-width:1000px){.app-content{margin-left:220px}}
+.editor-page{padding-bottom:150px}
+.editor-page .audio-dock{
+  position:fixed;
+  left:calc(254px + 30px);
+  right:30px;
+  bottom:13px;
+  width:auto;
+  margin:0;
+  z-index:20;
+}
+@media(min-width:751px) and (max-width:1000px){.editor-page .audio-dock{left:calc(220px + 22px);right:22px;bottom:12px}}
+@media(max-width:750px){
+  .app-content{margin-left:0}
+  .editor-page .audio-dock{left:12px;right:12px;bottom:8px}
+}

@@ -79,7 +79,12 @@ def main():
             desktop.get_by_role("button",name="編集する").first.click()
             desktop.get_by_role("heading",name="文字起こし",exact=True).wait_for()
             assert desktop.locator("textarea").count()>0
-            desktop.screenshot(path=str(OUT/"editor.png"),full_page=True)
+            assert desktop.locator(".audio-dock").evaluate(
+                "(element) => {const b=element.getBoundingClientRect();"
+                "return getComputedStyle(element).position==='fixed'"
+                " && b.top>=0 && b.bottom<=window.innerHeight}"
+            ),"Studio audio player must remain fixed and visible"
+            desktop.screenshot(path=str(OUT/"editor.png"),full_page=False)
             # Studio tabs show only outstanding overlap candidates; no false claim
             # that every ordinary row has been human-reviewed.
             assert desktop.get_by_role("button",name="3秒戻る").count()==1
@@ -109,6 +114,11 @@ def main():
             mobile.screenshot(path=str(OUT/"mobile.png"),full_page=True)
             mobile.get_by_role("button",name="メニューを開く").click()
             mobile.get_by_role("button",name="ログアウト").wait_for()
+            mobile.get_by_role("button",name="メニューを閉じる").click()
+            mobile.get_by_role("button",name="編集する").first.click()
+            mobile.get_by_role("heading",name="文字起こし",exact=True).wait_for()
+            assert mobile.locator(".audio-dock").is_visible()
+            mobile.screenshot(path=str(OUT/"studio_mobile.png"),full_page=False)
             assert not mobile_errors,mobile_errors
             browser.close()
     finally: http.shutdown()
