@@ -1,7 +1,7 @@
 """Extracted from notebook cell 16; algorithm unchanged."""
 from bisect import bisect_right
 
-def assign_and_group(asr_segments, diar_segments, enable_diarization=True):
+def assign_and_group(asr_segments, diar_segments, enable_diarization=True, *, word_stability_ms=0):
     ordered = sorted(diar_segments, key=lambda r: (r['start'], r['end']))
     ends = [r['end'] for r in ordered]
     raw_to_label = {}
@@ -39,6 +39,10 @@ def assign_and_group(asr_segments, diar_segments, enable_diarization=True):
         if not seg.get('words') and str(seg.get('text', '')).strip():
             words.append({'start': float(seg['start']), 'end': float(seg['end']), 'text': str(seg['text']), 'speaker': speaker_for(seg['start'], seg['end'])})
     words.sort(key=lambda r: (r['start'], r['end']))
+    if word_stability_ms:
+        from .speaker_stability import stabilize_short_switches
+        words, _audit = stabilize_short_switches(words, max_island_seconds=word_stability_ms / 1000)
+        # Experimental only. Keep baseline behavior unchanged by default.
     MAX_CHARS, MAX_SECONDS, MAX_PAUSE = (110, 22, 1.5)
     utterances, current = ([], None)
     for w in words:
