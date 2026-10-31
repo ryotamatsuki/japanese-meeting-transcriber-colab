@@ -28,7 +28,15 @@ jobs:
         run: |
           python -m pip install modal==1.4.3 playwright==1.56.0
           python -m playwright install --with-deps chromium
-      - name: Resolve existing anonymous endpoint without redeploying other apps
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build current Studio and deploy only the anonymous app
+        run: |
+          npm ci --no-audit --no-fund --prefix frontend
+          npm run build --prefix frontend
+          modal deploy beta_modal_anonymous.py
+      - name: Resolve current anonymous endpoint
         id: endpoint
         run: |
           python - <<'PY'
@@ -56,3 +64,20 @@ jobs:
           name: anonymous-studio-browser-sanitized
           path: local_runs/browser-anonymous/
           retention-days: 7
+      - name: Reclaim only deleted pilot test jobs and their test quota
+        if: success()
+        run: |
+          python - <<'PY'
+          import modal
+          state=modal.Dict.from_name('kiroku-anonymous-studio-jobs-v1')
+          allowed={'anonymous-a.ogg','anonymous-b.ogg','public-domain-a.ogg','public-domain-b.ogg'}
+          records=[(k,v) for k,v in state.items() if isinstance(k,str) and k.startswith('job:')]
+          if (len(records)!=4 or state.get('job_index',[]) or
+              any(v.get('status')!='deleted' or v.get('filename') not in allowed for k,v in records) or
+              len(state.get('gpu_job_times',[]))!=4):
+              raise SystemExit('Refuse quota cleanup: state contains unexpected or undeleted work')
+          # Exactly the four deleted jobs from this authorised pilot, no user workload.
+          for key,value in records: state.pop(key)
+          state['gpu_job_times']=[]
+          print('Deleted pilot metadata and four pilot quota entries reclaimed. Production limit remains 4/24h.')
+          PY
