@@ -95,6 +95,9 @@ jobs:
         run: python scripts/browser_react_stage37_smoke.py
 
   jcre3-deploy-once:
+    concurrency:
+      group: kiroku-jcre3-unseen-once-20261031
+      cancel-in-progress: false
     needs: tests
     if: ${{ github.event_name == 'push' && github.ref_name == 'research/qwen-fixed-weights-quality-20261031' && contains(github.event.head_commit.message, '[jcre3-pilot-once]') }}
     runs-on: ubuntu-latest

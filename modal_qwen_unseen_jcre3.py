@@ -1,7 +1,13 @@
 """One-off, non-production Qwen baseline on a newly acquired J-CRe3 pilot."""
 from pathlib import Path
 import modal
-from modal_qwen_quality_ablation import image, weights
+# Imported dependencies are not automatically mounted in each Modal image.
+# Only the client needs the image factory and its local requirements file.
+if modal.is_local():
+    from modal_qwen_quality_ablation import image
+else:
+    image=modal.Image.debian_slim(python_version='3.11')
+weights=modal.Volume.from_name('meeting-transcriber-models-v1',create_if_missing=False)
 
 APP_NAME='kiroku-jcre3-unseen-pilot-20261031-01'
 INPUT_VOLUME='kiroku-jcre3-unseen-inputs-20261031-01'
@@ -134,5 +140,4 @@ def main(output:str):
     import json
     result=evaluate.remote()
     Path(output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
-    print('JCRE3_NUMERIC_RESULT',json.dumps({'successful_records':result['successful_records'],
-        'median_cpcer':result['median_cpcer'],'gpu_function_seconds':result['gpu_function_seconds']}))
+    print('JCRE3_NUMERIC_RESULT',json.dumps(result,ensure_ascii=False))
