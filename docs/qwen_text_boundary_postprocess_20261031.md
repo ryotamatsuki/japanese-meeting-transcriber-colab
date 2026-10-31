@@ -41,6 +41,56 @@ Use identical untouched recording and human ELAN reference, and log numeric-only
 
 Important: B alone **cannot** fix an incorrectly labelled speaker, since changing speaker labels is forbidden. That requires a separate, audio-grounded C study.
 
+## Four real-LLM synthetic A10 runs (2026-10-31)
+
+The Qwen3-4B-Instruct-2507 model was actually loaded and used on **Modal A10**.
+All inputs were deliberately synthetic Japanese utterances; no real recordings
+or human transcripts were transferred in these runs. Qwen3-ASR-1.7B weights
+were untouched. The temporary one-shot CI GPU-trigger workflow was deleted
+after these runs. All numbers are from the run's numeric-only logs.
+
+| Protocol / evidence | Synthetic cases | Findings |
+|---|---:|---|
+| [Run 41178993676](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41178993676) | 8 | Initial conservative prompt missed both intended joins; safety restrictions prevented other joins |
+| [Run 41179182216](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41179182216) | 12 | 3 intended joins found; 3 false joins (finished sentence, fast acknowledgement, ambiguous reply) |
+| [Run 41179329077](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41179329077) | 18 | 5 intended joins found; 3 false joins on unpunctuated complete clauses and topic shifts |
+| [Run 41179503156](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41179503156) | 22 | 7 intended joins found; 2 false joins on topic shifts following grammatically incomplete fragments |
+
+Final run: 20/22 match manually designated synthetic boundary judgments,
+7/7 intended joins, 2 false joins, 13 correct nonjoins. These figures are NOT
+speech transcription accuracy or an independent test-set generalization rate.
+The first 18 examples were used for iterative rule/prompt development; the
+four later probe examples were also inspected here and cannot subsequently
+count as an untouched holdout.
+
+Final-run A10 GPU function duration 35.733 seconds, of which 31.232 seconds
+was model loading. The original CI test suite plus research extensions ran
+235 offline tests successfully, and React build / browser checks succeeded:
+[latest post-inference CI](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41179503108).
+GPU function time excludes image build, CI queues, storage, and billing overhead.
+
+### Root cause and decision
+
+An instruction LLM systematically over-merged when given permissive join
+candidates, including independent topic changes. Hard guardrails blocked
+finished sentences, rapid acknowledgements and clauses that do not show
+obvious grammatical incompleteness. Still, two valid-looking incomplete
+fragments were in fact conversational topic switches, and Qwen proposed to
+merge them. In the absence of the source audio, no reliable speaker/turn
+grounding exists for these cases.
+
+**Research-only / review-only; do NOT automatically replace transcript rows
+in public Studio.** This procedure must not be claimed to improve cpCER: all
+word text and speaker assignments are fixed. Next evaluation needs
+license-cleared Japanese meeting recordings with independent human turn
+boundary annotations, and user edit-time measurement. A supervised text-only
+boundary classifier or an audio-conditioned model should be compared against
+Qwen and deterministic heuristics before a production decision.
+
 ## Status
 
-Implemented in a dedicated branch with synthetic multi-pattern regression tests. No real Qwen-LLM inference, live Modal test, licensed meeting comparison, or human edit-time trial has been performed as part of this branch yet. A production quality claim is prohibited.
+Implemented and tested with synthetic scenarios on both CPU and real A10 Qwen.
+Live Japanese meeting audio ground-truth tests, model-level unseen-source
+validation, human editing studies, production integration, and commercial
+acceptance are **not complete**. The code intentionally keeps every proposed
+change out of the production pipeline.
