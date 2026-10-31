@@ -88,6 +88,7 @@ async def edit_download(page, context, job, index, other_marker):
 async def main():
     OUT.mkdir(parents=True,exist_ok=True)
     start=time.monotonic()
+    assert SOURCES[0].read_bytes()!=SOURCES[1].read_bytes(), 'Inputs must be distinct'
     jobs=[]
     async with async_playwright() as p:
         browser=await p.chromium.launch(headless=True)
@@ -124,7 +125,9 @@ async def main():
             result={'pass':True,'real_gpu_jobs':2,'independent_browser_contexts':2,'physical_devices':0,
                     'viewports':['1440x1000','390x844'],'utterance_counts':counts,
                     'elapsed_seconds':round(time.monotonic()-start,3),
-                    'pipeline_seconds':[s.get('pipeline_seconds') for s in states]}
+                    'pipeline_seconds':[s.get('pipeline_seconds') for s in states],
+                    'gpu_task_seconds':[s.get('gpu_task_seconds') for s in states],
+                    'audio_duration_seconds':[s.get('duration') for s in states]}
             (OUT/'summary.json').write_text(json.dumps(result,indent=2))
             print('KIROKU_ANONYMOUS_BROWSER_LIVE_PASS '+json.dumps(result))
         finally:
