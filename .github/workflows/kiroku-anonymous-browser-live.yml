@@ -1,4 +1,4 @@
-name: Kiroku anonymous Studio - real Chromium desktop and mobile GPU E2E
+name: Kiroku anonymous Studio - real Chromium desktop and mobile GPU E2E (cold-start tolerant)
 on:
   push:
     branches: [feature/kiroku-anonymous-isolation-20261031]
