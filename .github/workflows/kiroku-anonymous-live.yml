@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy_and_smoke:
-    if: "github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'deploy: publish speaker-paragraph UI by existing Modal production workflow'"
+    if: "github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'deploy: republish paragraph UI with HTMLParser live verification'"
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -81,23 +81,51 @@ jobs:
           KIROKU_TEST_URL: ${{ steps.deploy.outputs.url }}
         run: |
           python - <<'PY'
-          import httpx,os,re
+          import httpx,os,time
+          from html.parser import HTMLParser
+          class Scripts(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.urls=[]
+              def handle_starttag(self,tag,attributes):
+                  if tag == 'script':
+                      src=dict(attributes).get('src','')
+                      if src.startswith('/ui/assets/') and src.endswith('.js'):
+                          self.urls.append(src)
+          last_reason='not started'
           with httpx.Client(base_url=os.environ['KIROKU_TEST_URL'],timeout=120) as c:
-              response=c.get('/')
-              assert response.status_code==200
-              assert c.get('/api/session').json()['anonymous'] is True
-              found=re.findall(r'/ui/assets/[^"\\s<>]+\\.js',response.text)
-              assert found, 'Live page did not reference expected JS'
-              assets=[]
-              for url in set(found):
-                  js=c.get(url)
-                  assert js.status_code==200,(url,js.status_code)
-                  assets.append(js.text)
-              combined=''.join(assets)
-              assert '同じ話者をまとめて読む' in combined,'New grouping UI not on LIVE endpoint'
-              assert '発言単位で編集' in combined,'Editable original rows not in LIVE bundle'
-              assert c.get('/api/jobs').status_code==200,'Anonymous owner-scoped jobs API failed'
-          print('LIVE_BUNDLE_SPEAKER_PARAGRAPHS_AND_ANONYMOUS_SESSION=PASS')
+              for attempt in range(12):
+                  response=c.get('/')
+                  session=c.get('/api/session')
+                  if response.status_code!=200 or session.status_code!=200:
+                      last_reason='home/session endpoint returned non-200'
+                  elif session.json().get('anonymous') is not True:
+                      last_reason='session was not anonymous'
+                  else:
+                      parser=Scripts()
+                      parser.feed(response.text)
+                      if not parser.urls:
+                          last_reason='no React scripts referenced by served HTML'
+                      else:
+                          scripts=[]
+                          for url in parser.urls:
+                              js=c.get(url)
+                              if js.status_code==200:
+                                  scripts.append(js.text)
+                          content=''.join(scripts)
+                          if '同じ話者をまとめて読む' not in content:
+                              last_reason='new paragraph toggle not yet in JS served by live app'
+                          elif '発言単位で編集' not in content:
+                              last_reason='non-destructive editor control not present'
+                          elif c.get('/api/jobs').status_code!=200:
+                              last_reason='anonymous owner-scoped jobs API failed'
+                          else:
+                              print('LIVE_BUNDLE_SPEAKER_PARAGRAPHS_AND_ANONYMOUS_SESSION=PASS')
+                              print('LIVE_SCRIPT_ASSETS_FOUND='+str(len(parser.urls)))
+                              break
+                  if attempt==11:
+                      raise AssertionError('LIVE_ASSET_VERIFICATION_FAILED: '+last_reason)
+                  time.sleep(4)
           PY
       - name: Restore last validated public anonymous Studio if postdeploy checks fail
         if: failure()
