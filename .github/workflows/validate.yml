@@ -94,7 +94,7 @@ jobs:
       - name: Verify desktop and smartphone copy, formats and clipboard fallback
         run: python scripts/browser_react_stage37_smoke.py
   paired-asr-one-time:
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/feature/kiroku-anonymous-isolation-20261031' }}
+    if: ${{ github.event_name == 'pull_request' && github.head_ref == 'feature/kiroku-anonymous-isolation-20261031' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
