@@ -1,6 +1,8 @@
 /** Format the complete transcript for pasting into notes or messages.
  * Never use a paginated/filtered subset. This is a pure client-side operation. */
-export type TranscriptCopyMode = 'speaker' | 'plain' | 'timed'
+import { groupConsecutiveSpeakerRows } from './speakerParagraphs.ts'
+
+export type TranscriptCopyMode = 'speaker' | 'plain' | 'timed' | 'speaker-raw'
 export type TranscriptCopyRow = {
   start: number
   speaker: string
@@ -14,7 +16,14 @@ function clock(seconds: number): string {
 }
 
 export function formatTranscriptForCopy(rows: readonly TranscriptCopyRow[], mode: TranscriptCopyMode = 'speaker'): string {
-  return rows.filter(row => row.text.trim().length > 0).map(row => {
+  // Keep the legacy per-utterance option; readable modes join consecutive
+  // identical speakers without editing the actual transcript or timestamps.
+  const source = mode === 'speaker-raw'
+    ? rows.filter(row => row.text.trim().length > 0)
+    : groupConsecutiveSpeakerRows(rows.map(row => ({
+        ...row, end: row.start, // copy-only rows do not expose end timestamps
+      })))
+  return source.map(row => {
     if (mode === 'plain') return row.text
     const speech = `${row.speaker}：${row.text}`
     return mode === 'timed' ? `[${clock(row.start)}] ${speech}` : speech

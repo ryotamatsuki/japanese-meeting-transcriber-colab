@@ -99,6 +99,14 @@ def main():
             assert desktop.locator(".transcript-item").count()<70
             desktop.locator(".studio-tabs button").nth(0).click()
             assert desktop.locator(".transcript-item").count()==60
+            # Read-only consecutive speaker paragraphs preserve original
+            # editable utterances and all underlying audio time boundaries.
+            desktop.get_by_role("button",name="同じ話者をまとめて読む OFF").click()
+            assert desktop.locator(".speaker-paragraph").count()==60
+            assert desktop.locator(".paragraph-text").first.inner_text()==SAMPLES[0]
+            assert desktop.get_by_role("button",name="発言単位で編集").count()==60
+            desktop.get_by_role("button",name="同じ話者をまとめて読む ON").click()
+            assert desktop.get_by_label("発言1の話者名").count()==1
             # Speaker renaming is a bulk edit, not a per-row visual label.
             desktop.once("dialog",lambda dialog:dialog.accept("司会者"))
             desktop.get_by_role("button",name="話者Aを一括変更").click()

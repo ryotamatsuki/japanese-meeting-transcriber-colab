@@ -135,3 +135,14 @@
   .copy-dialog{max-height:calc(100dvh - 24px);padding:16px}
   .copy-dialog textarea{height:45dvh}
 }
+
+/* Deterministic same-speaker reading paragraphs: editable rows remain untouched. */
+.speaker-paragraph{align-items:flex-start}
+.speaker-paragraph .utterance-content{padding-top:2px}
+.paragraph-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;line-height:2;color:#344051;margin:8px 0 2px}
+.paragraph-clock{color:#7e8a9d;font-size:11px;font-variant-numeric:tabular-nums}
+.paragraph-count{color:#909aad;font-size:10px}
+.paragraph-edit{margin-left:auto;border:1px solid #dfe4ed;background:#fff;color:#6263b6;border-radius:7px;font-size:11px;padding:7px 9px;cursor:pointer}
+.paragraph-edit:hover{background:#f5f4ff}
+.studio-subtoolbar{flex-wrap:wrap;row-gap:9px}
+@media(max-width:650px){.speaker-paragraph{padding:15px 12px}.paragraph-edit{margin-left:0}}

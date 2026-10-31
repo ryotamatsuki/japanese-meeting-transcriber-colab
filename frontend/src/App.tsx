@@ -7,6 +7,7 @@ import {
   ShieldCheck, SlidersHorizontal, Trash2, Volume2, WandSparkles, X, RotateCcw, Pencil, ListChecks
 } from 'lucide-react'
 import { formatTranscriptForCopy } from './transcriptCopy'
+import { groupConsecutiveSpeakerRows } from './speakerParagraphs'
 import type { TranscriptCopyMode } from './transcriptCopy'
 
 type JobStatus = 'uploading' | 'queued' | 'running' | 'complete' | 'failed' | 'deleted'
@@ -84,6 +85,7 @@ export default function App() {
   const [actionId, setActionId] = useState<string | null>(null)
   const [notice, setNotice] = useState<{message: string; error?: boolean} | null>(null)
   const [copyMode, setCopyMode] = useState<TranscriptCopyMode>('speaker')
+  const [readingView, setReadingView] = useState(false)
   const [manualCopyText, setManualCopyText] = useState<string | null>(null)
   const manualCopyField = useRef<HTMLTextAreaElement | null>(null)
   const player = useRef<HTMLAudioElement | null>(null)
@@ -155,6 +157,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', shortcut)
   }, [])
 
+  const readingGroups = useMemo(() => groupConsecutiveSpeakerRows(rows), [rows])
+  const readingMatches = useMemo(() => readingGroups.filter(group =>
+    !query.trim() || (group.speaker + ' ' + group.text).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())
+  ), [readingGroups,query])
   const speakers = useMemo(() => [...new Set(rows.map(r => r.speaker))], [rows])
   const activeIndex = useMemo(() => rows.findIndex(r => r.start <= time && time < r.end), [rows,time])
   // Only overlap review windows have verified per-window check state. This tab
@@ -166,20 +172,27 @@ export default function App() {
     if (reviewOnly && !pendingWindows.some(w => x.row.start < w.end && w.start < x.row.end)) return false
     return !query.trim() || (x.row.speaker + ' ' + x.row.text).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())
   }), [rows,query,reviewOnly,pendingWindows])
-  const pages = Math.max(1, Math.ceil(matches.length / PAGE))
+  const matchedCount = readingView ? readingMatches.length : matches.length
+  const pages = Math.max(1, Math.ceil(matchedCount / PAGE))
   const currentPage = Math.min(page, pages - 1)
   const visible = matches.slice(currentPage * PAGE, (currentPage + 1) * PAGE)
+  const readableVisible = readingMatches.slice(currentPage * PAGE, (currentPage + 1) * PAGE)
   const running = jobs.find(j => ['uploading','queued','running'].includes(j.status))
   const completedCount = jobs.filter(j=>j.status==='complete').length
   useEffect(() => {
     if (!followAudio || !playing || !selectedId.current || query || reviewOnly || activeIndex < 0) return
-    const destination = Math.floor(activeIndex / PAGE)
+    const groupIndex = readingView
+      ? readingGroups.findIndex(group => group.firstIndex <= activeIndex && activeIndex <= group.lastIndex)
+      : activeIndex
+    if (groupIndex < 0) return
+    const destination = Math.floor(groupIndex / PAGE)
     if (page !== destination) setPage(destination)
-    const timeout = window.setTimeout(() => rowNodes.current.get(activeIndex)?.scrollIntoView({
+    const rowKey = readingView ? readingGroups[groupIndex].firstIndex : activeIndex
+    const timeout = window.setTimeout(() => rowNodes.current.get(rowKey)?.scrollIntoView({
       behavior: 'smooth', block: 'nearest'
     }), 80)
     return () => window.clearTimeout(timeout)
-  }, [activeIndex,followAudio,playing,page,query,reviewOnly])
+  }, [activeIndex,followAudio,playing,page,query,reviewOnly,readingView,readingGroups])
   function abandon() { return !changed || window.confirm('保存していない編集があります。破棄しますか？') }
   function edit(fn: (items: Row[]) => Row[]) { revision.current++; setRows(fn); setChanged(true) }
   function changeField(index: number, field: keyof Row, value: string | number) {
@@ -290,7 +303,7 @@ export default function App() {
   }
   function gotoRow(index: number) {
     if (index<0) return
-    setQuery('');setPage(Math.floor(index/PAGE))
+    setReadingView(false);setReviewOnly(false);setQuery('');setPage(Math.floor(index/PAGE))
     window.setTimeout(()=>rowNodes.current.get(index)?.scrollIntoView({behavior:'smooth',block:'center'}),80)
   }
   function split(index: number) {
@@ -374,6 +387,7 @@ export default function App() {
                 <option value="speaker">話者付き</option>
                 <option value="plain">発言のみ</option>
                 <option value="timed">時刻・話者付き</option>
+                <option value="speaker-raw">発言ごと（従来）</option>
               </select>
               <button type="button" className="outlined-button copy-button" disabled={!rows.some(r=>r.text.trim())}
                 onClick={copyTranscript}><Copy size={17}/> 全文コピー</button>
@@ -389,9 +403,30 @@ export default function App() {
                 <button type="button" aria-pressed={!reviewOnly} className={!reviewOnly?'active':''} onClick={()=>{setReviewOnly(false);setPage(0)}}><FileText size={14}/> 全文 <span>{rows.length}</span></button>
                 <button type="button" aria-pressed={reviewOnly} className={reviewOnly?'active':''} onClick={()=>{setReviewOnly(true);setPage(0)}}><ListChecks size={14}/> 重複要確認 <span>{pendingWindows.length}</span></button>
               </div>
+              <button className={'follow-toggle'+(readingView?' enabled':'')} type="button" aria-pressed={readingView}
+                onClick={()=>{setReadingView(value=>!value);setReviewOnly(false);setPage(0);rowNodes.current.clear()}}>
+                <FileText size={14}/> 同じ話者をまとめて読む {readingView?'ON':'OFF'}</button>
               <button className={'follow-toggle'+(followAudio?' enabled':'')} type="button" aria-pressed={followAudio} onClick={()=>setFollowAudio(value=>!value)}><Volume2 size={14}/> 自動追従 {followAudio?'ON':'OFF'}</button>
             </div>
-            <div className="transcript-list">{visible.length===0?<div className="empty-list">{reviewOnly ? '未確認の重複発話候補はありません' : '一致する発言がありません'}</div>:visible.map(({row,index})=>
+            <div className="transcript-list">{readingView ? (
+              readableVisible.length===0?<div className="empty-list">一致する発言がありません</div>
+              :readableVisible.map(group=>
+                <div className={'transcript-item speaker-paragraph'+(group.firstIndex<=activeIndex && activeIndex<=group.lastIndex?' transcript-active':'')}
+                  key={group.firstIndex}
+                  ref={el=>{if(el)rowNodes.current.set(group.firstIndex,el);else rowNodes.current.delete(group.firstIndex)}}>
+                  <button className="utterance-play" onClick={()=>playFrom(group.firstIndex)}
+                    title="段落の先頭から再生" aria-label={'話者段落'+(group.firstIndex+1)+'を再生'}><Play size={15} fill="currentColor"/></button>
+                  <div className="utterance-content">
+                    <div className="utterance-meta">
+                      <span className={'speaker-name '+speakerColor(group.speaker)}>{group.speaker}</span>
+                      <span className="paragraph-clock">{hhmmss(group.start)} – {hhmmss(group.end)}</span>
+                      <span className="paragraph-count">{group.rowCount}発言を表示上まとめています</span>
+                      <button className="paragraph-edit" type="button" onClick={()=>gotoRow(group.firstIndex)}>発言単位で編集</button>
+                    </div>
+                    <p className="paragraph-text">{group.text}</p>
+                  </div>
+                </div>)
+            ) : visible.length===0?<div className="empty-list">{reviewOnly ? '未確認の重複発話候補はありません' : '一致する発言がありません'}</div>:visible.map(({row,index})=>
               <div className={'transcript-item'+(activeIndex===index?' transcript-active':'')} key={index}
                 ref={el=>{if(el)rowNodes.current.set(index,el);else rowNodes.current.delete(index)}}>
                 <button className="utterance-play" onClick={()=>playFrom(index)} title="この発言から再生" aria-label={'発言'+(index+1)+'を再生'}><Play size={15} fill="currentColor"/></button>
@@ -407,7 +442,7 @@ export default function App() {
                   <textarea value={row.text} aria-label={'発言'+(index+1)+'のテキスト'} rows={Math.max(2,Math.min(6,Math.ceil(row.text.length/62)))} spellCheck={false} onChange={e=>changeField(index,'text',e.target.value)}/>
                 </div>
               </div>)}</div>
-            <div className="pagination"><span>{matches.length} 件中 {matches.length?currentPage*PAGE+1:0}–{Math.min(matches.length,(currentPage+1)*PAGE)} 件</span>
+            <div className="pagination"><span>{matchedCount} {readingView?'段落':'件'}中 {matchedCount?currentPage*PAGE+1:0}–{Math.min(matchedCount,(currentPage+1)*PAGE)} {readingView?'段落':'件'}</span>
               <div><TinyButton title="前のページ" disabled={currentPage===0} icon={<ChevronLeft size={17}/>} onClick={()=>setPage(Math.max(0,currentPage-1))}/>
                 <span>{currentPage+1} / {pages}</span>
                 <TinyButton title="次のページ" disabled={currentPage>=pages-1} icon={<ChevronRight size={17}/>} onClick={()=>setPage(Math.min(pages-1,currentPage+1))}/></div></div>

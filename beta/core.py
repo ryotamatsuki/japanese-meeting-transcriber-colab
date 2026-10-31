@@ -104,8 +104,10 @@ def csv_safe(s):
 
 def build_export(rows, *, source_name='meeting') -> bytes:
     """Exports user-verified edits. Text files are not labelled as verified unless edited."""
+    from .readable import readable_paragraphs
     rows = list(rows)
-    transcript = ''.join(f"[{srt_time(r['start'])}–{srt_time(r['end'])}] {r['speaker']}: {r['text']}\n" for r in rows)
+    transcript = ''.join(f"[{srt_time(r['start'])}–{srt_time(r['end'])}] {r['speaker']}: {r['text']}\n" for r in readable_paragraphs(rows))
+    original_transcript = ''.join(f"[{srt_time(r['start'])}–{srt_time(r['end'])}] {r['speaker']}: {r['text']}\n" for r in rows)
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(['start', 'end', 'speaker', 'utterance'])
@@ -115,6 +117,7 @@ def build_export(rows, *, source_name='meeting') -> bytes:
     payload = io.BytesIO()
     with zipfile.ZipFile(payload, 'w', zipfile.ZIP_DEFLATED) as z:
         z.writestr('文字起こし.txt', transcript)
+        z.writestr('文字起こし_発言単位.txt', original_transcript)
         z.writestr('文字起こし.csv', '\ufeff' + out.getvalue())
         z.writestr('文字起こし.srt', subtitles)
         z.writestr('文字起こし.json', json.dumps({'source': source_name, 'utterances': rows,
