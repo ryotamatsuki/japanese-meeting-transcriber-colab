@@ -23,7 +23,7 @@ jobs:
           python - <<'PY'
           import json,os,subprocess,time
           repo=os.environ["GH_REPO"]
-          want="57439f900451029c0b8120e56f335c3311b7e35a"
+          want="3228b9df87d914276dd716d9e524d49e76c02660"
           path="once-open-audio-decomposition-20261031.yml"
           run=None
           for _ in range(20):
