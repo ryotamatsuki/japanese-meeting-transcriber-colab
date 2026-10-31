@@ -80,6 +80,18 @@ def main():
             desktop.get_by_role("heading",name="文字起こし",exact=True).wait_for()
             assert desktop.locator("textarea").count()>0
             desktop.screenshot(path=str(OUT/"editor.png"),full_page=True)
+            # Studio tabs show only outstanding overlap candidates; no false claim
+            # that every ordinary row has been human-reviewed.
+            assert desktop.get_by_role("button",name="3秒戻る").count()==1
+            desktop.locator(".studio-tabs button").nth(1).click()
+            assert desktop.locator(".transcript-item").count()>0
+            assert desktop.locator(".transcript-item").count()<70
+            desktop.locator(".studio-tabs button").nth(0).click()
+            assert desktop.locator(".transcript-item").count()==60
+            # Speaker renaming is a bulk edit, not a per-row visual label.
+            desktop.once("dialog",lambda dialog:dialog.accept("司会者"))
+            desktop.get_by_role("button",name="話者Aを一括変更").click()
+            assert desktop.get_by_label("発言1の話者名").input_value()=="司会者"
             desktop.get_by_label("発言1のテキスト").fill("UIテストのための編集です。")
             desktop.get_by_text("未保存",exact=True).wait_for()
             assert desktop.get_by_role("button",name="ZIP出力").is_disabled()

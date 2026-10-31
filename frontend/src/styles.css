@@ -14,3 +14,70 @@
 @media(max-width:1000px){.sidebar{width:220px}.brand{padding-left:18px}.topbar{padding:0 22px}.workspace{padding:28px 22px}.stats{gap:12px}.stat-card{padding:20px 18px}.editing-grid{grid-template-columns:1fr}.inspector{display:block}.inspector-title{max-width:500px}.editor-heading{align-items:start;flex-direction:column}.audio-dock{gap:15px}.dock-file{width:140px}}
 @media(max-width:750px){.sidebar{position:fixed;transform:translateX(-100%);transition:transform .2s;width:260px}.sidebar-open{transform:translateX(0)}.sidebar-shade{position:fixed;inset:0;background:#14203888;z-index:25}.menu-button,.mobile-close{display:grid;place-items:center}.menu-button{margin-right:4px;color:#546175}.mobile-close{margin-left:auto;color:#9baac0}.topbar{height:62px;padding:0 16px}.private-tag{font-size:9px}.topbar-side{gap:12px}.workspace{padding:25px 16px}.dashboard-heading h1{font-size:25px}.stats{grid-template-columns:1fr;gap:10px}.stat-card{min-height:auto;padding:16px 20px}.stat-card strong{margin-top:9px;font-size:24px}.stat-card strong.stat-text{margin-top:12px;font-size:19px}.upload-panel,.recent{padding:20px 17px}.drop-area{padding:28px 12px}.upload-footer{align-items:stretch;gap:14px}.diar-setting{order:3;width:100%;padding:0}.upload-submit{margin-left:auto}.step-mark{display:none}.record{flex-wrap:wrap}.record-name{flex:1}.status{margin-left:58px}.record-actions{margin-left:auto}.app-footer{flex-direction:column;padding:18px 16px}.panel-header{padding:18px 14px}.panel-tools{width:100%}.search-field{flex:1}.search-field input{width:100%}.transcript-item{padding:15px 12px;gap:7px}.transcript-active{padding-left:9px}.row-actions{width:100%;justify-content:flex-end;margin-left:0}.audio-dock{bottom:5px;border-radius:10px;flex-wrap:wrap;padding:13px;gap:10px}.dock-file{width:100%;order:1}.dock-player{width:100%;order:2;flex:1}.dock-rate{order:3;margin-left:auto}.inspector{padding:20px}.editor-heading{gap:14px}.editor-actions{width:100%}.editor-actions .save-state{flex:1}.document-title h1{font-size:18px}.status{white-space:nowrap}}
 @media(max-width:410px){.topbar-side .private-tag{display:none}.speaker-name{width:85px}.time-field input{width:60px}.upload-submit{width:100%}.dock-rate{display:none}}
+
+
+/* Stage38 — Studio: transcription-first composition */
+.editor-page{--studio-ink:#253044;--studio-accent:#6760df}
+.studio-kicker{display:flex;align-items:center;gap:8px;color:#7770d2;font-size:10px;letter-spacing:1.45px;font-weight:800;margin-bottom:13px}
+.studio-kicker span{display:inline-block;width:7px;height:7px;border-radius:50%;background:#786ff0;box-shadow:0 0 0 4px #efedff}
+.editor-page .back-button{margin-bottom:13px}
+.editor-page .document-title h1{font-size:22px;letter-spacing:-.65px;line-height:1.35}
+.editor-page .editing-grid{grid-template-columns:minmax(0,1fr) 266px;gap:18px}
+.editor-page .transcript-panel{border-radius:13px;min-width:0}
+.studio-header{padding:21px 24px 18px}
+.studio-subtoolbar{display:flex;justify-content:space-between;align-items:center;padding:0 23px 0 23px;border-bottom:1px solid #eceef5;gap:10px;min-height:48px}
+.studio-tabs{align-self:stretch;display:flex;gap:21px;align-items:stretch;white-space:nowrap}
+.studio-tabs button{display:flex;align-items:center;gap:6px;border:0;background:none;color:#8b96a8;font-size:11px;font-weight:660;border-bottom:2px solid transparent;padding:0 2px;margin-bottom:-1px;cursor:pointer}
+.studio-tabs button:hover{color:#655fd1}
+.studio-tabs button.active{border-color:#6861e5;color:#605cce}
+.studio-tabs button span{font-size:10px;background:#f2f3f8;border-radius:9px;padding:2px 6px;color:#9aa4b3}
+.studio-tabs button.active span{color:#665fd2;background:#eeecff}
+.follow-toggle{background:#f8f9fc;border:1px solid #e6e9f2;border-radius:7px;padding:7px 10px;display:inline-flex;align-items:center;gap:5px;color:#8995a8;font-size:10px;white-space:nowrap}
+.follow-toggle.enabled{color:#6661c9;background:#f4f3ff;border-color:#e7e3ff}
+.follow-toggle:hover{border-color:#bcb7ef}
+.transcript-item{padding:18px 23px 19px}
+.transcript-active{padding-left:20px}
+.utterance-content textarea{font-size:13px;line-height:1.9}
+.inspector{padding:24px 17px;border-radius:13px}
+.inspector-title h3{font-size:13px;letter-spacing:-.15px}
+.inspector-group-heading{display:flex;justify-content:space-between;gap:8px;align-items:center;color:#7e89a1;font-size:10px;font-weight:740;margin-top:26px}
+.inspector-group-heading>span:last-child:not(:first-child){background:#f3f4f8;padding:5px 7px;border-radius:5px;color:#75839a}
+.inspector>p{margin:11px 0 17px}
+.inspector .speaker-entry{gap:8px;min-height:35px}
+.inspector .speaker-entry strong{font-size:11px}
+.inspector .speaker-entry .icon-button{flex-shrink:0;min-width:26px;width:26px;height:26px;background:#f6f7fb;color:#75829b}
+.inspector .speaker-entry .icon-button:hover{color:#5651c5;background:#eeedff}
+.shortcuts-heading{margin-top:29px;padding-top:17px;border-top:1px solid #e9edf3}
+.shortcut-list{margin-top:12px;display:flex;flex-direction:column;gap:9px}
+.shortcut-list>div{display:flex;align-items:center;gap:5px;font-size:10px;color:#8792a5}
+.shortcut-list kbd{border-radius:5px;border:1px solid #e2e7ef;background:#f7f8fa;padding:4px 6px;font-size:9px;color:#657187;font-family:inherit;white-space:nowrap}
+.shortcut-list span{margin-left:auto;text-align:right}
+.inspector-warning{margin-top:23px}
+.audio-dock{background:#19243b;gap:15px;box-shadow:0 16px 45px #19243b35}
+.skip-button{border:0;background:#2a3750;color:#c4cdef;display:flex;align-items:center;flex-direction:column;justify-content:center;gap:1px;min-width:37px;height:38px;border-radius:9px}
+.skip-button:hover{background:#374863}
+.skip-button span{font-size:8px}
+.play-button{background:#706cf0}
+.play-button:hover{background:#5e59db}
+.editor-page .audio-dock{bottom:12px}
+@media(max-width:1150px){
+  .editor-page .editing-grid{grid-template-columns:minmax(0,1fr) 220px;gap:11px}
+  .studio-header{align-items:flex-start;flex-wrap:wrap}
+  .studio-subtoolbar{padding:0 15px}
+  .studio-tabs{gap:9px}
+  .transcript-item{padding:15px 12px}
+  .transcript-active{padding-left:9px}
+}
+@media(max-width:1000px){.editor-page .editing-grid{grid-template-columns:1fr}.editor-page .inspector{display:block}}
+@media(max-width:680px){
+  .studio-kicker{font-size:9px;margin-bottom:10px}
+  .studio-subtoolbar{padding:0 11px;flex-wrap:wrap;gap:1px 10px}
+  .studio-tabs{min-height:44px}
+  .studio-tabs button{font-size:10px}
+  .studio-tabs button svg{width:13px}
+  .follow-toggle{font-size:9px;margin:5px 0}
+  .editor-page .document-title h1{font-size:18px}
+  .audio-dock .skip-button{min-width:32px;width:32px}
+  .editor-page .audio-dock{bottom:4px}
+}
+@media(prefers-reduced-motion:reduce){.editor-page *{scroll-behavior:auto!important;transition:none!important}}

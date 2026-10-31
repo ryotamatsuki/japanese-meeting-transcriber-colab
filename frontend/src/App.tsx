@@ -4,7 +4,7 @@ import {
   Activity, AlertCircle, ArrowRight, Check, CheckCheck, ChevronDown, ChevronLeft,
   ChevronRight, Clock3, CloudUpload, Download, FileAudio2, FileText, Headphones,
   LoaderCircle, LogOut, Menu, Mic2, Pause, Play, Plus, RotateCw, Save, Search,
-  ShieldCheck, SlidersHorizontal, Trash2, Volume2, WandSparkles, X
+  ShieldCheck, SlidersHorizontal, Trash2, Volume2, WandSparkles, X, RotateCcw, Pencil, ListChecks
 } from 'lucide-react'
 
 type JobStatus = 'uploading' | 'queued' | 'running' | 'complete' | 'failed' | 'deleted'
@@ -69,6 +69,8 @@ export default function App() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [query, setQuery] = useState('')
+  const [reviewOnly, setReviewOnly] = useState(false)
+  const [followAudio, setFollowAudio] = useState(true)
   const [page, setPage] = useState(0)
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -119,10 +121,16 @@ export default function App() {
       const editable = ['INPUT','TEXTAREA','SELECT'].includes(el.tagName) || el.isContentEditable
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault(); document.getElementById('save-transcript')?.click()
-      } else if (!editable && e.code === 'Space' && selectedId.current && player.current) {
+      } else if (!editable && selectedId.current && player.current && e.code === 'Space') {
         e.preventDefault()
         if (player.current.paused) void player.current.play().catch(() => {})
         else player.current.pause()
+      } else if (!editable && selectedId.current && player.current && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+        e.preventDefault()
+        const change = e.code === 'ArrowLeft' ? -3 : 3
+        const limit = Number.isFinite(player.current.duration) ? player.current.duration : Infinity
+        player.current.currentTime = Math.max(0, Math.min(limit, player.current.currentTime + change))
+        setTime(player.current.currentTime)
       }
     }
     window.addEventListener('keydown', shortcut)
@@ -131,13 +139,29 @@ export default function App() {
 
   const speakers = useMemo(() => [...new Set(rows.map(r => r.speaker))], [rows])
   const activeIndex = useMemo(() => rows.findIndex(r => r.start <= time && time < r.end), [rows,time])
-  const matches = useMemo(() => rows.map((row, index) => ({row,index})).filter(x =>
-    !query.trim() || (x.row.speaker + ' ' + x.row.text).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [rows,query])
+  // Only overlap review windows have verified per-window check state. This tab
+  // must not imply that ordinary transcript rows were human-reviewed.
+  const pendingWindows = useMemo(() => review?.available
+    ? review.windows.filter(w => !review.reviewed_ids.includes(w.id))
+    : [], [review])
+  const matches = useMemo(() => rows.map((row, index) => ({row,index})).filter(x => {
+    if (reviewOnly && !pendingWindows.some(w => x.row.start < w.end && w.start < x.row.end)) return false
+    return !query.trim() || (x.row.speaker + ' ' + x.row.text).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())
+  }), [rows,query,reviewOnly,pendingWindows])
   const pages = Math.max(1, Math.ceil(matches.length / PAGE))
   const currentPage = Math.min(page, pages - 1)
   const visible = matches.slice(currentPage * PAGE, (currentPage + 1) * PAGE)
   const running = jobs.find(j => ['uploading','queued','running'].includes(j.status))
   const completedCount = jobs.filter(j=>j.status==='complete').length
+  useEffect(() => {
+    if (!followAudio || !playing || !selectedId.current || query || reviewOnly || activeIndex < 0) return
+    const destination = Math.floor(activeIndex / PAGE)
+    if (page !== destination) setPage(destination)
+    const timeout = window.setTimeout(() => rowNodes.current.get(activeIndex)?.scrollIntoView({
+      behavior: 'smooth', block: 'nearest'
+    }), 80)
+    return () => window.clearTimeout(timeout)
+  }, [activeIndex,followAudio,playing,page,query,reviewOnly])
   function abandon() { return !changed || window.confirm('保存していない編集があります。破棄しますか？') }
   function edit(fn: (items: Row[]) => Row[]) { revision.current++; setRows(fn); setChanged(true) }
   function changeField(index: number, field: keyof Row, value: string | number) {
@@ -154,7 +178,7 @@ export default function App() {
       ])
       if (info.status !== 'complete') throw Error('文字起こしが完了していません')
       setSelected(info); selectedId.current=info.id; setRows(data.rows); setReview(checks)
-      revision.current=0; setChanged(false); setQuery(''); setPage(0); setTime(0); setPlaying(false); setMobileMenu(false)
+      revision.current=0; setChanged(false); setQuery(''); setReviewOnly(false); setPage(0); setTime(0); setPlaying(false); setMobileMenu(false)
     } catch(e) { setNotice({message:'編集画面を開けません: '+String(e),error:true}) }
     finally { opening.current=false;setActionId(null) }
   }
@@ -238,6 +262,19 @@ export default function App() {
     edit(before=>{const next=[...before],a=next[index],b=next[index+1]
       next.splice(index,2,{...a,end:Math.max(a.end,b.end),text:(a.text+' '+b.text).trim()});return next})
   }
+  function renameSpeaker(previous: string) {
+    const answer = window.prompt('「' + previous + '」の発言をすべて変更する新しい話者名', previous)
+    if (answer === null) return
+    const next = answer.trim()
+    if (!next || next.length > 80) {
+      setNotice({message:'話者名は1〜80文字で入力してください',error:true})
+      return
+    }
+    if (next === previous) return
+    if (speakers.includes(next) && !window.confirm('既存の「' + next + '」と統合しますか？')) return
+    edit(before => before.map(r => r.speaker === previous ? {...r,speaker:next} : r))
+    setNotice({message:'話者名を一括変更しました。保存すると反映されます。'})
+  }
   function addRow() {
     edit(before=>[...before,{start:time,end:time+1,speaker:speakers[0]||'話者未設定',text:''}].sort((a,b)=>a.start-b.start))
     setQuery('');setPage(Math.floor(rows.length/PAGE))
@@ -278,6 +315,7 @@ export default function App() {
         {!ready?<div className="loading"><LoaderCircle size={30} className="spin"/> 認証状態を確認しています…</div>:
         selected?<div className="editor-page">
           <div className="editor-heading"><div>
+            <div className="studio-kicker"><span/> TRANSCRIPT STUDIO</div>
             <button className="back-button" onClick={closeJob}><ChevronLeft size={16}/> ワークスペースに戻る</button>
             <div className="document-title"><span className="document-icon"><FileAudio2 size={25}/></span><div><h1>{selected.filename}</h1><p>{hhmmss(selected.duration)} · {rows.length} 発言 · {speakers.length} 話者</p></div></div>
           </div><div className="editor-actions">
@@ -287,11 +325,18 @@ export default function App() {
               <a className="outlined-button" href={'/api/jobs/'+selected.id+'/download'}><Download size={17}/> ZIP出力</a>}
           </div></div>
           <div className="editing-grid"><section className="transcript-panel">
-            <div className="panel-header"><div><h2>文字起こし</h2><p>音声を聞きながら、発言を確認・編集</p></div>
+            <div className="panel-header studio-header"><div><h2>文字起こし</h2><p>音声を聞きながら、発言を確認・編集</p></div>
               <div className="panel-tools"><label className="search-field"><Search size={17}/><input placeholder="発言を検索…" aria-label="発言を検索" value={query} onChange={e=>{setQuery(e.target.value);setPage(0)}}/>
-                {query&&<button onClick={()=>setQuery('')} aria-label="検索をクリア"><X size={14}/></button>}</label>
+                {query&&<button onClick={()=>{setQuery('');setPage(0)}} aria-label="検索をクリア"><X size={14}/></button>}</label>
                 <button className="add-button" onClick={addRow}><Plus size={17}/> 発言を追加</button></div></div>
-            <div className="transcript-list">{visible.length===0?<div className="empty-list">一致する発言がありません</div>:visible.map(({row,index})=>
+            <div className="studio-subtoolbar">
+              <div className="studio-tabs" role="group" aria-label="発言の表示条件">
+                <button type="button" aria-pressed={!reviewOnly} className={!reviewOnly?'active':''} onClick={()=>{setReviewOnly(false);setPage(0)}}><FileText size={14}/> 全文 <span>{rows.length}</span></button>
+                <button type="button" aria-pressed={reviewOnly} className={reviewOnly?'active':''} onClick={()=>{setReviewOnly(true);setPage(0)}}><ListChecks size={14}/> 重複要確認 <span>{pendingWindows.length}</span></button>
+              </div>
+              <button className={'follow-toggle'+(followAudio?' enabled':'')} type="button" aria-pressed={followAudio} onClick={()=>setFollowAudio(value=>!value)}><Volume2 size={14}/> 自動追従 {followAudio?'ON':'OFF'}</button>
+            </div>
+            <div className="transcript-list">{visible.length===0?<div className="empty-list">{reviewOnly ? '未確認の重複発話候補はありません' : '一致する発言がありません'}</div>:visible.map(({row,index})=>
               <div className={'transcript-item'+(activeIndex===index?' transcript-active':'')} key={index}
                 ref={el=>{if(el)rowNodes.current.set(index,el);else rowNodes.current.delete(index)}}>
                 <button className="utterance-play" onClick={()=>playFrom(index)} title="この発言から再生" aria-label={'発言'+(index+1)+'を再生'}><Play size={15} fill="currentColor"/></button>
@@ -312,9 +357,11 @@ export default function App() {
                 <span>{currentPage+1} / {pages}</span>
                 <TinyButton title="次のページ" disabled={currentPage>=pages-1} icon={<ChevronRight size={17}/>} onClick={()=>setPage(Math.min(pages-1,currentPage+1))}/></div></div>
           </section>
-          <aside className="inspector"><div className="inspector-title"><h3><Mic2 size={18}/> 話者</h3><span>{speakers.length}人</span></div>
-            <p>話者名は各発言から編集できます。</p>
-            <div className="speaker-list">{speakers.map(name=><div className="speaker-entry" key={name}><span className={'speaker-avatar '+speakerColor(name)}><Mic2 size={16}/></span><strong>{name||'未設定'}</strong><small>{rows.filter(r=>r.speaker===name).length}件</small></div>)}</div>
+          <aside className="inspector"><div className="inspector-title"><h3><SlidersHorizontal size={18}/> 編集インスペクター</h3></div>
+            <div className="inspector-group-heading"><span>話者を管理</span><span>{speakers.length}人</span></div>
+            <p>話者をクリックすると、該当するすべての発言の名前を一括変更できます。</p>
+            <div className="speaker-list">{speakers.map(name=><div className="speaker-entry" key={name}><span className={'speaker-avatar '+speakerColor(name)}><Mic2 size={16}/></span><strong title={name}>{name||'未設定'}</strong><small>{rows.filter(r=>r.speaker===name).length}件</small>
+              <TinyButton icon={<Pencil size={14}/>} title={name+'を一括変更'} onClick={()=>renameSpeaker(name)}/></div>)}</div>
             {review?.available&&review.windows.length>0&&<><div className="inspector-title inspector-divider"><h3><Volume2 size={18}/> 重複発話を確認</h3><span>{review.reviewed_ids.length}/{review.windows.length}</span></div>
               <p>同時発話の可能性がある区間です。原音声を確認してください。</p>
               <div className="review-list">{review.windows.map(w=><div className="review-item" key={w.id}>
@@ -322,12 +369,14 @@ export default function App() {
                 <button onClick={()=>gotoRow(rows.findIndex(r=>r.start<w.end && w.start<r.end))}>発言へ</button>
                 <label><input type="checkbox" checked={review.reviewed_ids.includes(w.id)} onChange={e=>void checkReview(w.id,e.target.checked)}/> 確認済</label>
               </div>)}</div></>}
+            <div className="inspector-group-heading shortcuts-heading"><span>キーボード操作</span></div>
+            <div className="shortcut-list"><div><kbd>Space</kbd><span>再生 / 一時停止</span></div><div><kbd>←</kbd><kbd>→</kbd><span>3秒移動</span></div><div><kbd>⌘ / Ctrl + S</kbd><span>修正を保存</span></div></div>
             <div className="inspector-warning"><ShieldCheck size={18}/><span>話者ラベルはAIの推定です。音声との照合が必要です。</span></div>
           </aside></div>
           <div className="audio-dock"><audio key={selected.id} ref={player} src={'/api/jobs/'+selected.id+'/audio'} preload="metadata"
               onTimeUpdate={e=>setTime(e.currentTarget.currentTime)} onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onEnded={()=>setPlaying(false)}/>
             <div className="dock-file"><div className="dock-file-icon"><Headphones size={22}/></div><div><strong title={selected.filename}>{selected.filename}</strong><span>オリジナル音声</span></div></div>
-            <div className="dock-player"><button className="play-button" aria-label={playing?'一時停止':'再生'} onClick={()=>{if(!player.current)return;if(playing)player.current.pause();else void player.current.play().catch(()=>setNotice({message:'再生に失敗しました',error:true}))}}>{playing?<Pause size={20} fill="currentColor"/>:<Play size={20} fill="currentColor"/>}</button>
+            <div className="dock-player"><button className="skip-button" aria-label="3秒戻る" title="3秒戻る (←)" onClick={()=>seek(Math.max(0,time-3))}><RotateCcw size={18}/><span>3秒</span></button><button className="play-button" aria-label={playing?'一時停止':'再生'} onClick={()=>{if(!player.current)return;if(playing)player.current.pause();else void player.current.play().catch(()=>setNotice({message:'再生に失敗しました',error:true}))}}>{playing?<Pause size={20} fill="currentColor"/>:<Play size={20} fill="currentColor"/>}</button>
               <span className="clock">{hhmmss(time)}</span><input className="audio-range" type="range" aria-label="音声の再生位置" min={0} max={selected.duration||1} step={0.1} value={Math.min(time,selected.duration||1)} onChange={e=>seek(Number(e.target.value))}/>
               <span className="clock">{hhmmss(selected.duration)}</span></div>
             <div className="dock-rate"><Volume2 size={17}/><select value={speed} aria-label="再生速度" onChange={e=>{const v=Number(e.target.value);setSpeed(v);if(player.current)player.current.playbackRate=v}}>
