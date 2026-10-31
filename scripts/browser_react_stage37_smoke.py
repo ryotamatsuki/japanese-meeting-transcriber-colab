@@ -166,6 +166,32 @@ def main():
             assert mobile.locator(".audio-dock").is_visible()
             mobile.screenshot(path=str(OUT/"studio_mobile.png"),full_page=False)
             assert not mobile_errors,mobile_errors
+            # Synthetic in-flight job: exact server-reported transcription stage,
+            # never an invented overall completion percentage.
+            import time
+            stamp=time.time()
+            ongoing=dict(id='c'*32,filename='進捗テスト_非機密.wav',
+                         status='running',received=50000,expected_size=50000,
+                         duration=3600,speakers=2,created=stamp-90,started_at=stamp-70,
+                         progress=dict(phase='asr',audio_done=600,audio_total=3600,
+                                       phase_started_at=stamp-60,updated_at=stamp))
+            JOBS.append(ongoing)
+            progress_page=browser.new_page(viewport={"width":390,"height":844})
+            progress_page.goto(url,wait_until="networkidle")
+            progress_page.get_by_role("heading",name="文字起こしを作成中").wait_for()
+            bar=progress_page.get_by_role("progressbar",name="文字認識した音声の割合")
+            assert bar.get_attribute('aria-valuenow')=='17'
+            assert progress_page.get_by_text("音声 10:00 / 60:00 を認識済み").is_visible()
+            assert progress_page.get_by_text("文字認識工程の残り目安",exact=False).is_visible()
+            progress_page.screenshot(path=str(OUT/"progress_mobile.png"),full_page=False)
+            ongoing['progress']=dict(phase='diarization',
+                                     phase_started_at=stamp,updated_at=stamp)
+            progress_page.get_by_role("button",name="更新").click()
+            progress_page.get_by_text("誰が話したかを識別しています").wait_for()
+            stage_bar=progress_page.get_by_role("progressbar",name="現在の処理工程（完了率は測定できません）")
+            assert stage_bar.get_attribute('aria-valuenow') is None
+            assert not progress_page.get_by_text("文字認識工程の残り目安",exact=False).count()
+            assert not mobile_errors,mobile_errors
             browser.close()
     finally: http.shutdown()
     print("STAGE37_REACT_BROWSER_DESKTOP_MOBILE_AND_EDITOR_PASS")
