@@ -93,3 +93,92 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Verify desktop and smartphone copy, formats and clipboard fallback
         run: python scripts/browser_react_stage37_smoke.py
+  paired-asr-one-time:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/feature/kiroku-anonymous-isolation-20261031' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      KIROKU_BUDGET_VERIFIED: ${{ vars.KIROKU_BUDGET_VERIFIED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fail closed without prior Modal budget verification
+        run: |
+          if [[ -z "${MODAL_TOKEN_ID:-}" || -z "${MODAL_TOKEN_SECRET:-}" || "${KIROKU_BUDGET_VERIFIED:-}" != yes ]]; then
+            echo "::error::No verified Modal budget/credentials; experiment not started."
+            exit 2
+          fi
+      - name: Install experimental CLI and public dataset tools
+        run: python -m pip install modal==1.4.3 huggingface-hub==0.36.0
+      - name: Prepare the single identical public reference recording
+        shell: bash
+        run: |
+          sudo apt-get -qq update
+          sudo apt-get -qq install -y ffmpeg
+          python - <<'PY'
+          import hashlib
+          import os
+          import pathlib
+          import subprocess
+          from huggingface_hub import hf_hub_download
+          target=pathlib.Path(os.environ["RUNNER_TEMP"])/"paired-audio"
+          target.mkdir(parents=True, exist_ok=True)
+          repo="IngCrowd/japanese-themed-dialogue"
+          base="japanese-themed-dialogue01/japanese-themed-dialogue01"
+          wav=hf_hub_download(repo_id=repo,filename=base+"_audio.wav",repo_type="dataset")
+          eaf=hf_hub_download(repo_id=repo,filename=base+".eaf",repo_type="dataset")
+          subprocess.run(["ffmpeg","-hide_banner","-loglevel","error","-nostdin","-y",
+                          "-i",wav,"-ar","16000","-ac","1","-b:a","48k",
+                          str(target/"reference.mp3")],check=True,timeout=180)
+          content=pathlib.Path(eaf).read_bytes()
+          digest=hashlib.sha256(content).hexdigest()
+          assert digest=="c59daa71d0ffa34e50b4c532d33f5c0d2a51ceaa8aea4435a68a87d924f61b32", "Unexpected EAF content"
+          (target/"reference.eaf").write_bytes(content)
+          audio=target/"reference.mp3"
+          assert 0<audio.stat().st_size<20*1024*1024
+          print("PUBLIC_SAMPLE_READY", "audio_bytes",audio.stat().st_size,"eaf_sha256",digest)
+          PY
+      - name: Run Whisper and Qwen on same 11-minute Japanese source in isolated A10 functions
+        run: |
+          modal run modal_compare_asr_cost.py \
+            --audio "$RUNNER_TEMP/paired-audio/reference.mp3" \
+            --eaf "$RUNNER_TEMP/paired-audio/reference.eaf" \
+            --output "$RUNNER_TEMP/paired-asr-numeric-only.json"
+      - name: Audit both results and calculate normalized cost at official Modal rates
+        run: |
+          python - <<'PY'
+          import json,os,pathlib
+          from decimal import Decimal
+          p=pathlib.Path(os.environ["RUNNER_TEMP"])/"paired-asr-numeric-only.json"
+          j=json.loads(p.read_text(encoding="utf-8"))
+          assert len(j["results"])==2
+          a,b=j["results"]
+          assert a["model"]=="whisper" and b["model"]=="qwen"
+          assert a["audio_sha256"]==b["audio_sha256"]
+          assert a["eaf_sha256"]==b["eaf_sha256"]==j["input_eaf_sha256"]
+          assert a["reference_characters"]==b["reference_characters"]
+          rate=Decimal("0.000306")+2*Decimal("0.0000131")+8*Decimal("0.00000222")
+          for x in (a,b):
+            seconds=Decimal(str(x["gpu_invocation_seconds"]))
+            length=Decimal(str(x["audio_seconds"]))
+            assert length>600 and 0<=x["cpcer"]<=1.5
+            x["invocation_cost_rate_estimate_usd"]=float(rate*seconds)
+            x["invocation_cost_per_audio_hour_estimate_usd"]=float(rate*seconds*Decimal(3600)/length)
+          j["official_assumed_usd_per_resource_second"]=str(rate)
+          j["cost_kind"]="Tariff estimate from measured in-function invocation seconds, NOT Modal billed cost"
+          p.write_text(json.dumps(j,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+          print("PAIRED_RESEARCH_NUMERIC_RESULT",json.dumps([
+            {"model":x["model"],"cpcer_percent":round(x["cpcer"]*100,3),
+             "seconds":round(x["gpu_invocation_seconds"],3),
+             "estimated_usd_per_audio_hour":round(x["invocation_cost_per_audio_hour_estimate_usd"],4)}
+            for x in (a,b)],ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paired-asr-cpcer-and-timing-numeric-only
+          path: ${{ runner.temp }}/paired-asr-numeric-only.json
+          retention-days: 7
