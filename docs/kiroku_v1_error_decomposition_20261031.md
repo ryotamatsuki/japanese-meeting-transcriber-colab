@@ -20,7 +20,7 @@ PR #7 text-only boundary Qwen accepted all nine eligible pairs and did not beat 
 
 ## Reproduce on a permission-cleared private evaluation workstation
 
-Use **the same source recording**, frozen Qwen chunk output and existing Community-1 speaker segments. Standard and Exclusive must be from the same run. Python dependencies are those already required by existing ELAN/cpCER evaluators.
+Use **the same source recording**, frozen Qwen chunk output and existing Community-1 speaker segments. The speaker tiers must represent independently annotated human speakers, not ASR-generated labels. Standard and Exclusive must be from the same run. Python dependencies are those already required by existing ELAN/cpCER evaluators.
 
 ```sh
 python -m unittest tests.test_qwen_error_decomposition -v
@@ -32,7 +32,7 @@ python -m scripts.qwen_error_decomposition \
   --output /private/metric_only.json
 ```
 
-The Qwen JSON must contain `duration_seconds` and `chunks` as accepted by `scripts/qwen_timing_bridge.py`. The audio and human references must not be passed to Qwen as context. `--timing-alternative` may be supplied for a **pre-frozen** timing-only hypothesis. Existing ELAN loader currently supports `speaker_1` and `speaker_2` only; **three/four-speaker records need an explicitly validated multi-speaker reference loader before v1**, not a silent reinterpretation.
+The Qwen JSON must contain `duration_seconds` and `chunks` as accepted by `scripts/qwen_timing_bridge.py`. The audio and human references must not be passed to Qwen as context. `--timing-alternative` may be supplied for a **pre-frozen** timing-only hypothesis. A strict 2-4-speaker ELAN reference loader is now included (`scripts/v1_meeting_reference.py`). Automatic tier discovery accepts `speaker_1`...`speaker_4`; use `--speaker-tiers` with explicit human tier IDs for other annotation conventions. This is syntactic ingestion, NOT human validation of the reference or permission to run it on Modal.
 
 ## Experiment sequence (frozen before held-out use)
 
