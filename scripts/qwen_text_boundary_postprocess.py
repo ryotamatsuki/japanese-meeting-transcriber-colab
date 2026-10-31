@@ -91,11 +91,16 @@ def _merge_ok(a: dict, b: dict) -> bool:
         return False
     if len(a["text"]) + len(b["text"]) > MAX_GROUP_CHARS:
         return False
-    # Do not join a finished sentence after a perceptible pause.
-    if a["text"].rstrip().endswith(("。", "！", "？", "!", "?")) and gap > 0.35:
+    # A full stop strongly indicates a complete utterance even without a pause.
+    # Qwen's first real-GPU run on ambiguous negative examples merged these.
+    if a["text"].rstrip().endswith(("。", "！", "？", "!", "?")):
         return False
-    # Backchannels may belong to another turn even with equal diarization label.
-    if a["text"].strip("。！？，、!? ") in {"はい", "ええ", "うん", "そう", "なるほど"} and gap > 0.15:
+    # Repeated backchannels and reply openings are independent turns even if a
+    # diarizer briefly gives both the same label.
+    if a["text"].strip("。！？，、!? ") in {"はい", "ええ", "うん", "そう", "なるほど"}:
+        return False
+    if b["text"].lstrip().startswith(("はい、", "はい。", "ええ、", "ええ。",
+                                         "うん、", "うん。")):
         return False
     return True
 
