@@ -44,12 +44,14 @@ class FourArmTests(unittest.TestCase):
         self.assertEqual(scores["baseline"]["missed_merges"], 1)
 
     def test_audio_feature_from_true_pcm_not_reference(self):
-        import numpy as np
+        from array import array
+        import math
         sr = 16000
-        t = np.arange(3*sr) / sr
-        audio = np.zeros(3*sr, dtype="float32")
-        audio[:sr] = .1 * np.sin(2 * np.pi * 200 * t[:sr])
-        audio[int(1.1*sr):] = .05 * np.sin(2*np.pi*150*t[int(1.1*sr):])
+        audio = array("f", [0.0]) * (3 * sr)
+        for index in range(sr):
+            audio[index] = .1 * math.sin(2 * math.pi * 200 * index / sr)
+        for index in range(int(1.1*sr), 3*sr):
+            audio[index] = .05 * math.sin(2 * math.pi * 150 * index / sr)
         rows = [r(0, 1, "話者1", "これは"),r(1.1, 2.9, "話者1", "試験")]
         feats = audio_features(audio, sr, rows, [0])
         self.assertEqual(feats["0"]["gap_seconds"], .1)
