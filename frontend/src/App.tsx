@@ -15,6 +15,7 @@ type Row = { start: number; end: number; speaker: string; text: string }
 type ReviewWindow = { id: string; start: number; end: number }
 type Review = { available: boolean; total_candidates: number; windows: ReviewWindow[]; reviewed_ids: string[] }
 type Session = { csrf: string; limits: { file_bytes: number; duration_seconds: number } }
+const PREVIEW_ONLY = import.meta.env.VITE_PREVIEW_ONLY === 'true'
 const CHUNK = 4 * 1024 * 1024
 const PAGE = 60
 let csrf = ''
@@ -195,6 +196,7 @@ export default function App() {
   function pick(f: File | null) { if (f) setFile(f) }
   function onDrop(e: DragEvent<HTMLDivElement>) { e.preventDefault();setDragging(false);pick(e.dataTransfer.files.item(0)) }
   async function upload() {
+    if (PREVIEW_ONLY) return
     if (!file || uploading) return
     if (session && file.size > session.limits.file_bytes) {setNotice({message:'ファイルサイズの上限は'+mb(session.limits.file_bytes)+'です',error:true});return}
     setNotice(null);setUploading(true);setUploadProgress(0)
@@ -216,6 +218,7 @@ export default function App() {
     } finally {setUploading(false)}
   }
   async function save() {
+    if (PREVIEW_ONLY) return
     if (!selected || !changed || saving) return
     const copy=rows.map(r=>({...r})), savedRevision=revision.current
     setSaving(true)
@@ -227,6 +230,7 @@ export default function App() {
     finally {setSaving(false)}
   }
   async function remove(j: Job) {
+    if (PREVIEW_ONLY) return
     if (selected?.id===j.id && !abandon()) return
     if (!window.confirm('「'+j.filename+'」の録音と文字起こしを完全に削除しますか？')) return
     setActionId(j.id)
@@ -239,6 +243,7 @@ export default function App() {
     finally {setActionId(null)}
   }
   async function logout() {
+    if (PREVIEW_ONLY) { window.location.assign('/'); return }
     if (!abandon()) return
     try {await api('/logout',{method:'POST'});window.location.assign('/login')}
     catch(e) {setNotice({message:String(e),error:true})}
@@ -307,8 +312,8 @@ export default function App() {
           <FileAudio2 size={18}/><span><strong title={j.filename}>{j.filename}</strong><small>{statuses[j.status]?.label||j.status}</small></span>
           {j.status==='complete'&&<ChevronRight size={14}/>}</button>)}</div>
       <div className="sidebar-footer">
-        <div className="sidebar-privacy"><ShieldCheck size={18}/><div>非公開ワークスペース<small>非機密音声のみ</small></div></div>
-        <button onClick={()=>void logout()}><LogOut size={17}/> ログアウト</button>
+        <div className="sidebar-privacy"><ShieldCheck size={18}/><div>{PREVIEW_ONLY ? 'UIデモ（実データなし）' : '非公開ワークスペース'}<small>{PREVIEW_ONLY ? 'アップロード・保存は無効' : '非機密音声のみ'}</small></div></div>
+        {!PREVIEW_ONLY&&<button onClick={()=>void logout()}><LogOut size={17}/> ログアウト</button>}
       </div>
     </aside>
     {mobileMenu&&<div className="sidebar-shade" onClick={()=>setMobileMenu(false)}/>}
@@ -316,8 +321,9 @@ export default function App() {
       <header className="topbar"><div className="breadcrumbs">
         <button className="menu-button" onClick={()=>setMobileMenu(true)} aria-label="メニューを開く"><Menu size={21}/></button>
         <span>ワークスペース</span><ChevronRight size={15}/><strong>{selected?'文字起こし編集':'ダッシュボード'}</strong>
-      </div><div className="topbar-side"><span className="private-tag"><i/> PRIVATE ALPHA</span><span className="avatar">K</span></div></header>
+      </div><div className="topbar-side"><span className="private-tag"><i/> {PREVIEW_ONLY ? 'PUBLIC UI PREVIEW' : 'PRIVATE ALPHA'}</span><span className="avatar">K</span></div></header>
       <main className="workspace">
+        {PREVIEW_ONLY&&<div className="preview-warning" role="status"><ShieldCheck size={19}/><span><strong>パスワード不要のデザインプレビュー</strong>　サンプル会議だけを表示しています。音声アップロード・AI推論・保存・ダウンロードは無効です。</span></div>}
         {!ready?<div className="loading"><LoaderCircle size={30} className="spin"/> 認証状態を確認しています…</div>:
         selected?<div className="editor-page">
           <div className="editor-heading"><div>
@@ -326,8 +332,8 @@ export default function App() {
             <div className="document-title"><span className="document-icon"><FileAudio2 size={25}/></span><div><h1>{selected.filename}</h1><p>{hhmmss(selected.duration)} · {rows.length} 発言 · {speakers.length} 話者</p></div></div>
           </div><div className="editor-actions">
             <span className={'save-state'+(changed?' unsaved':'')}>{changed?<AlertCircle size={16}/>:<CheckCheck size={16}/>} {changed?'未保存':'保存済み'}</span>
-            <button id="save-transcript" className="primary-button" disabled={!changed||saving} onClick={()=>void save()}>{saving?<LoaderCircle size={17} className="spin"/>:<Save size={17}/>} 保存する</button>
-            {changed||saving?<button className="outlined-button" disabled title="先に変更を保存してください"><Download size={17}/> ZIP出力</button>:
+            <button id="save-transcript" className="primary-button" disabled={PREVIEW_ONLY||!changed||saving} onClick={()=>void save()}>{saving?<LoaderCircle size={17} className="spin"/>:<Save size={17}/>} 保存する</button>
+            {PREVIEW_ONLY||changed||saving?<button className="outlined-button" disabled title={PREVIEW_ONLY?'公開プレビューでは出力できません':'先に変更を保存してください'}><Download size={17}/> ZIP出力</button>:
               <a className="outlined-button" href={'/api/jobs/'+selected.id+'/download'}><Download size={17}/> ZIP出力</a>}
           </div></div>
           <div className="editing-grid"><section className="transcript-panel">
@@ -399,7 +405,7 @@ export default function App() {
             <div className={'drop-area'+(dragging?' is-dragging':'')+(file?' has-file':'')} role="button" tabIndex={0} aria-label="音声を選択"
               onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={onDrop}
               onClick={()=>!uploading&&inputFile.current?.click()} onKeyDown={e=>{if((e.key==='Enter'||e.key===' ')&&!uploading){e.preventDefault();inputFile.current?.click()}}}>
-              <input ref={inputFile} hidden type="file" accept=".mp3,.m4a,.wav,.flac,.ogg,.mp4,.webm,audio/*" onChange={(e:ChangeEvent<HTMLInputElement>)=>pick(e.target.files?.item(0)||null)}/>
+              <input ref={inputFile} disabled={PREVIEW_ONLY} hidden type="file" accept=".mp3,.m4a,.wav,.flac,.ogg,.mp4,.webm,audio/*" onChange={(e:ChangeEvent<HTMLInputElement>)=>pick(e.target.files?.item(0)||null)}/>
               <div className="drop-symbol">{file?<FileAudio2 size={29}/>:<CloudUpload size={29}/>}</div>
               <strong>{file?file.name:'ここに音声ファイルをドラッグ＆ドロップ'}</strong>
               <p>{file?mb(file.size)+' · クリックして変更':'またはクリックしてファイルを選択'}</p>
@@ -407,8 +413,8 @@ export default function App() {
             <div className="upload-footer"><div className="speaker-setting"><label htmlFor="speakers">話者数</label><div><Mic2 size={18}/><select id="speakers" value={speakerCount} disabled={uploading} onChange={e=>setSpeakerCount(Number(e.target.value))}>
               <option value={0}>自動推定</option><option value={2}>2人</option><option value={3}>3人</option><option value={4}>4人</option>
             </select><ChevronDown size={16}/></div></div>
-              <span className="diar-setting"><Check size={16}/> 話者分離・重複発話検出を有効化</span>
-              <button className="primary-button upload-submit" disabled={!file||uploading} onClick={()=>void upload()}>{uploading?<LoaderCircle size={19} className="spin"/>:<WandSparkles size={19}/>} {uploading?'転送中':'文字起こしを開始'} <ArrowRight size={17}/></button></div>
+              <span className="diar-setting"><Check size={16}/> {PREVIEW_ONLY?'デザインプレビュー（AI処理は無効）':'話者分離・重複発話検出を有効化'}</span>
+              <button className="primary-button upload-submit" disabled={PREVIEW_ONLY||!file||uploading} onClick={()=>void upload()}>{uploading?<LoaderCircle size={19} className="spin"/>:<WandSparkles size={19}/>} {uploading?'転送中':'文字起こしを開始'} <ArrowRight size={17}/></button></div>
             {uploading&&<div className="upload-progress"><div><span style={{width:uploadProgress+'%'}}/></div><p>アップロード中… {uploadProgress}%</p></div>}
           </section>
           <section className="recent"><div className="section-heading"><div><h2>最近の文字起こし</h2><p>処理結果を確認したり、作業を再開できます。</p></div>
