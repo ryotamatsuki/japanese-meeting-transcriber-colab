@@ -44,6 +44,8 @@ def evaluate():
     from scripts.qwen_boundary_fourarm import (
         MODEL,audio_features,candidate_universe,evaluate_four_arms,score_four_arms)
     from scripts.jcre3_boundary_adjudication import proxy_boundaries
+    from scripts.qwen_boundary_split_study import (
+        attach_aligned_words,split_candidates,run_split_arms,split_proxy,split_scores)
 
     started=time.perf_counter()
     zip_path=Path("/inputs/eval.zip")
@@ -135,7 +137,8 @@ def evaluate():
                               "reference_turns":len(reference),
                               "aligned_tokens":integrity["aligned_tokens"],
                               "asr_seconds":round(time.perf_counter()-t,3)})
-                processed.append((entry,utterances,signal,reference))
+                processed.append((entry,utterances,signal,reference,
+                                  collected,duration,speech_end))
             except Exception as exc:
                 entry.update({"failure_stage":"asr_alignment",
                               "failure_class":type(exc).__name__})
@@ -163,7 +166,7 @@ def evaluate():
             return tokenizer.decode(
                 out[0][inputs["input_ids"].shape[-1]:],skip_special_tokens=True)
 
-        for entry,utterances,signal,reference in processed:
+        for entry,utterances,signal,reference,collected,duration,speech_end in processed:
             t=time.perf_counter()
             try:
                 # Frozen candidate universe BEFORE any human reference is consulted.
@@ -186,6 +189,26 @@ def evaluate():
                     "human_boundary_gold":False,
                     "source_text_and_speakers_preserved":True,
                     "fourarm_seconds":round(time.perf_counter()-t,3)})
+                # SPLIT is a separate task with independent candidate universe
+                # and separate proxy labels; never blend its scores with merges.
+                try:
+                    with_words=attach_aligned_words(
+                        utterances,collected,duration,min(duration,speech_end))
+                    split_indices=split_candidates(with_words,cap=16)
+                    split_result=run_split_arms(with_words,signal,infer,cap=16)
+                    split_labels=split_proxy(reference,with_words,split_indices)
+                    entry["split"]={
+                        "status":"success",
+                        "candidate_count":len(split_indices),
+                        "proxy_split":sum(v=="split" for v in split_labels.values()),
+                        "proxy_keep":sum(v=="keep" for v in split_labels.values()),
+                        "proxy_uncertain":sum(v=="uncertain" for v in split_labels.values()),
+                        "arms":split_scores(split_result,split_labels),
+                        "human_boundary_gold":False}
+                except Exception as split_exc:
+                    entry["split"]={"status":"unavailable",
+                                    "failure_class":type(split_exc).__name__,
+                                    "human_boundary_gold":False}
             except Exception as exc:
                 entry.update({"status":"failed","failure_stage":"fourarm",
                               "failure_class":type(exc).__name__})
