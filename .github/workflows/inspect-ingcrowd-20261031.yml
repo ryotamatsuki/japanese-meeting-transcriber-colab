@@ -1,0 +1,86 @@
+name: Noncommercial independent dialogue numeric result reader
+on:
+  pull_request:
+    branches: [research/nemotron3-sortformer-jcre3-20261031]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    if: github.event.pull_request.number == 13
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Inspect one-shot GPU outcome and deidentified numeric report
+        run: |
+          python - <<'PY'
+          import json,os,subprocess,time,pathlib
+          repo=os.environ["GH_REPO"]
+          sha="e216b88779e335dc5083aed934149328dc63c505"
+          workflow="once-ingcrowd-outofsample-20261031.yml"
+          found=None
+          for i in range(42):
+              try:
+                  v=subprocess.check_output(["gh","api","-X","GET",
+                      f"repos/{repo}/actions/workflows/{workflow}/runs",
+                      "-f","per_page=30"],text=True)
+                  rr=[r for r in json.loads(v).get("workflow_runs",[])
+                      if r.get("head_sha")==sha and r.get("event")=="push"]
+                  if rr:
+                      found=max(rr,key=lambda r:r["id"])
+                      if found["status"]=="completed":break
+              except subprocess.CalledProcessError:
+                  print("STATUS_RETRY_NO_ACCESS")
+              time.sleep(10)
+          print("OUT_OF_SAMPLE_RUN",json.dumps(
+              {k:found.get(k) for k in ["id","status","conclusion","html_url"]}
+              if found else {"found":False}))
+          if not found:
+              raise SystemExit(0)
+          jobs=json.loads(subprocess.check_output(["gh","api","-X","GET",
+              f"repos/{repo}/actions/runs/{found['id']}/jobs"],text=True))
+          print("PHASES",json.dumps([
+              {"name":x["name"],"conclusion":x.get("conclusion"),
+               "status":x.get("status")}
+              for j in jobs.get("jobs",[]) for x in j.get("steps",[])
+              if "Acquire ONLY" in x["name"] or "Qwen3-ASR" in x["name"]
+              or "Compare Community" in x["name"] or "Destroy ALL" in x["name"]]))
+          if found.get("status")!="completed":
+              print("NO_FINAL_GPU_METRICS");raise SystemExit(0)
+          ars=json.loads(subprocess.check_output(["gh","api","-X","GET",
+            f"repos/{repo}/actions/runs/{found['id']}/artifacts"],text=True))
+          selection=[a for a in ars.get("artifacts",[])
+                     if a["name"]=="ingcrowd-independent-threeway-numeric-only"]
+          if len(selection)!=1:
+              print("NO_METRICS_ARTIFACT");raise SystemExit(0)
+          root=pathlib.Path("/tmp/numeric");root.mkdir()
+          subprocess.run(["gh","run","download",str(found["id"]),"--name",
+             selection[0]["name"],"--dir",str(root)],check=True)
+          for p in sorted(root.glob("*.json")):
+              v=json.loads(p.read_text())
+              if "model_info" in v:
+                  print("INDEPENDENT_MODEL_STATUS",json.dumps(v["model_info"]))
+                  for r in v["records"]:
+                      print("INDEPENDENT_RECORD_NUMERIC",json.dumps({
+                        "id":r["record_id"],"ref_chars":r["reference_chars"],
+                        "community":r["community"],
+                        "sortformer":r["nvidia/diar_streaming_sortformer_4spk-v2.1"],
+                        "nemotron3":r["nvidia/Nemotron-3-Diarization"]
+                      },ensure_ascii=False))
+                  print("THREEWAY_ALL_COMPLETED",v.get("all_completed"))
+              else:
+                  print("QWEN_FROZEN_NUMERIC",json.dumps({
+                    "completed":v.get("completed"),
+                    "records":[{"id":r["record_id"],"status":r["status"],
+                      "baseline_cpcer":r.get("baseline_cpcer"),
+                      "baseline_DER":r.get("baseline_DER"),
+                      "reference_chars":r.get("reference_chars"),
+                      "tokens":r.get("tokens"),
+                      "failure_stage":r.get("failure_stage"),
+                      "failure_class":r.get("failure_class")}
+                    for r in v["records"]]
+                  },ensure_ascii=False))
+          PY
