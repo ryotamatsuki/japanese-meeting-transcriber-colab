@@ -67,14 +67,12 @@ jobs:
           modal deploy beta_modal_anonymous.py 2>&1 | tee "$RUNNER_TEMP/kiroku-deploy.log"
           touch "$RUNNER_TEMP/kiroku-deployed"
           python - <<'PY'
-          import os,re,pathlib
-          raw=(pathlib.Path(os.environ['RUNNER_TEMP'])/'kiroku-deploy.log').read_text()
-          urls=re.findall(r'https://[A-Za-z0-9.-]+\.modal\.run',raw)
-          selected=[u for u in urls if 'anonymous' in u]
-          if not selected:
+          import os, modal
+          url=modal.Function.from_name('kiroku-anonymous-studio-beta','anonymous_web').get_web_url()
+          if not url or not url.startswith('https://') or not url.endswith('.modal.run'):
               raise SystemExit('Missing deployed anonymous Modal HTTPS URL')
           with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
-              print('url='+selected[-1],file=f)
+              print('url='+url,file=f)
           print('Anonymous Modal endpoint deployment detected.')
           PY
       - name: Download permitted, public-domain Japanese speech test audio
