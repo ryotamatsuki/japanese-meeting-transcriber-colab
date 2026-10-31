@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   independent:
-    if: "github.event.head_commit.message == 'research: run one-shot independent 3-dialogue A10 evaluation'"
+    if: "github.event.head_commit.message == 'research: rerun held-out Japanese natural dialogue after WAV size fix'"
     runs-on: ubuntu-latest
     timeout-minutes: 52
     env:
