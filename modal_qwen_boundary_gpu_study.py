@@ -64,6 +64,25 @@ def run_synthetic():
         ("ambiguous_continuation",
          [row(0, .9, "話者1", "次の方は"),
           row(1.0, 1.9, "話者1", "はい、こちらです。")], []),
+        # Newly selected synthetic patterns were not used in earlier GPU prompt tuning.
+        ("holdout_fragment_budget",
+         [row(0, .8, "話者1", "来年度の財源について"),
+          row(.9, 1.8, "話者1", "説明します。")], [0]),
+        ("holdout_fragment_notice",
+         [row(0, .8, "話者1", "対象となる県民の方へ"),
+          row(.9, 1.8, "話者1", "お知らせします。")], [0]),
+        ("holdout_question_without_stop",
+         [row(0, .7, "話者1", "参加人数は何名でしょうか"),
+          row(.8, 1.9, "話者1", "それでは次に進みます")], []),
+        ("holdout_two_topics",
+         [row(0, .8, "話者1", "計画は進行中です"),
+          row(.9, 1.8, "話者1", "別の案件を紹介します")], []),
+        ("holdout_repeated_statement",
+         [row(0, .8, "話者1", "実施する予定です"),
+          row(.9, 1.8, "話者1", "実施する予定です")], []),
+        ("holdout_short_ack",
+         [row(0, .2, "話者1", "うん"),
+          row(.25, .9, "話者1", "了解しました")], []),
     ]
     output = []
     def infer(messages):
