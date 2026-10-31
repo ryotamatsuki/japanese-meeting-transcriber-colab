@@ -8,12 +8,14 @@ import {
 } from 'lucide-react'
 import { formatTranscriptForCopy } from './transcriptCopy'
 import { groupConsecutiveSpeakerRows } from './speakerParagraphs'
+import {JobProgress} from './JobProgress'
+import type {ProgressSnapshot} from './progressModel'
 import type { TranscriptCopyMode } from './transcriptCopy'
 
 type JobStatus = 'uploading' | 'queued' | 'running' | 'complete' | 'failed' | 'deleted'
 type Job = { id: string; filename: string; status: JobStatus; received: number;
   expected_size: number; duration: number | null; speakers: number; created: number;
-  utterances?: number; error?: string }
+  utterances?: number; error?: string; started_at?: number; progress?: ProgressSnapshot }
 type Row = { start: number; end: number; speaker: string; text: string }
 type ReviewWindow = { id: string; start: number; end: number }
 type Review = { available: boolean; total_candidates: number; windows: ReviewWindow[]; reviewed_ids: string[] }
@@ -73,6 +75,7 @@ export default function App() {
   const [speakerCount, setSpeakerCount] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [now, setNow] = useState(() => Date.now()/1000)
   const [dragging, setDragging] = useState(false)
   const [query, setQuery] = useState('')
   const [reviewOnly, setReviewOnly] = useState(false)
@@ -124,11 +127,18 @@ export default function App() {
     // The edit workspace must open at the top, not preserve a long dashboard's scroll position.
     window.scrollTo({top:0,behavior:'instant'})
   }, [selected?.id])
+  const hasActiveJob = jobs.some(j => j.status==='queued' || j.status==='running' || j.status==='uploading')
   useEffect(() => {
     if (!ready) return
-    const timer = window.setInterval(() => { void refresh().catch(() => {}) }, 10000)
+    // Poll the owner-scoped job list; never start an extra inference job.
+    const timer = window.setInterval(() => { void refresh().catch(() => {}) }, hasActiveJob?3500:10000)
     return () => window.clearInterval(timer)
-  }, [ready, refresh])
+  }, [ready, refresh,hasActiveJob])
+  useEffect(() => {
+    if (!hasActiveJob) return
+    const timer=window.setInterval(()=>setNow(Date.now()/1000),1000)
+    return () => window.clearInterval(timer)
+  }, [hasActiveJob])
   useEffect(() => {
     if (!changed) return
     const before = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
@@ -479,6 +489,7 @@ export default function App() {
           <div className="stats"><div className="stat-card"><span><FileText size={18}/> 完了した文字起こし</span><strong>{String(completedCount).padStart(2,'0')}</strong><small>保存中のファイル</small></div>
             <div className="stat-card"><span><Clock3 size={18}/> 現在の処理</span><strong className="stat-text">{running?statuses[running.status]?.label:'待機中'}</strong><small>同時実行は1件まで</small></div>
             <div className="stat-card stat-secure"><span><ShieldCheck size={18}/> データの保護</span><strong className="stat-text">{session?.anonymous ? '利用者別に分離' : '非公開'}</strong><small>{session?.anonymous ? '登録・パスワード不要' : 'パスワード認証・24時間保持'}</small></div></div>
+          {running && (running.status==='queued' || running.status==='running') && <JobProgress job={running} now={now}/>}
           <section className="upload-panel"><div className="section-heading"><div><h2>新しい文字起こし</h2><p>会議音声をアップロードして、AI処理を開始します。</p></div><span className="step-mark">STEP 01 / 02</span></div>
             <div className={'drop-area'+(dragging?' is-dragging':'')+(file?' has-file':'')} role="button" tabIndex={0} aria-label="音声を選択"
               onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={onDrop}
@@ -493,7 +504,10 @@ export default function App() {
             </select><ChevronDown size={16}/></div></div>
               <span className="diar-setting"><Check size={16}/> {PREVIEW_ONLY?'デザインプレビュー（AI処理は無効）':'話者分離・重複発話検出を有効化'}</span>
               <button className="primary-button upload-submit" disabled={PREVIEW_ONLY||!file||uploading} onClick={()=>void upload()}>{uploading?<LoaderCircle size={19} className="spin"/>:<WandSparkles size={19}/>} {uploading?'転送中':'文字起こしを開始'} <ArrowRight size={17}/></button></div>
-            {uploading&&<div className="upload-progress"><div><span style={{width:uploadProgress+'%'}}/></div><p>アップロード中… {uploadProgress}%</p></div>}
+            {uploading&&<div className="upload-progress">
+              <div role="progressbar" aria-label="ファイルのアップロード進捗" aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress}><span style={{width:uploadProgress+'%'}}/></div>
+              <p>音声を安全にアップロードしています · {uploadProgress}%</p>
+            </div>}
           </section>
           <section className="recent"><div className="section-heading"><div><h2>最近の文字起こし</h2><p>処理結果を確認したり、作業を再開できます。</p></div>
             <button className="refresh-button" onClick={()=>void refresh()}><RotateCw size={16}/> 更新</button></div>

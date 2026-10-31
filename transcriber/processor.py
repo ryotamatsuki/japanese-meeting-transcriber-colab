@@ -51,7 +51,7 @@ class Config:
             raise ValueError('language must be ja, auto or en')
 
 
-def process(path, output_root, model_cache, config=None, token=None, stage='full'):
+def process(path, output_root, model_cache, config=None, token=None, stage='full', progress=None):
     from .asr import transcribe
     from .diarization import diarize
     config = config or Config()
@@ -70,11 +70,19 @@ def process(path, output_root, model_cache, config=None, token=None, stage='full
     job = dict(path=path, sha256=digest, prefix=prefix, outdir=outdir)
     metrics = {'stage': stage}
     started = time.perf_counter()
+    if progress:
+        progress('preparing')
     if stage != 'diarization':
-        asr_settings = transcribe(job, config, Path(model_cache), metrics)
+        # Keep the original test/CLI processor contract when tracking is off.
+        asr_settings = (transcribe(job, config, Path(model_cache), metrics, progress=progress)
+                        if progress else transcribe(job, config, Path(model_cache), metrics))
     if stage != 'asr':
+        if progress:
+            progress('diarization')
         diar_settings = diarize(job, config, token, metrics)
     if stage == 'full':
+        if progress:
+            progress('formatting')
         merge_started = time.perf_counter()
         job['utterances'], job['speaker_map'], job['word_count'] = assign_and_group(
             job['asr_segments'], job['diar_segments'], config.enable_diarization)

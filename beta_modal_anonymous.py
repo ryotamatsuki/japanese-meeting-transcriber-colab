@@ -44,6 +44,7 @@ def transcribe_job(job_id: str, extension: str, diarization: bool, speakers: int
     import json
     import tempfile
     from beta.core import valid_job_id, parse_original_archive
+    from beta.progress import progress_snapshot
     from beta.review import review_candidates_from_archive
     from transcriber.processor import Config, process
     if not valid_job_id(job_id) or extension not in ('.mp3','.m4a','.wav','.flac','.ogg','.mp4','.webm'):
@@ -61,7 +62,30 @@ def transcribe_job(job_id: str, extension: str, diarization: bool, speakers: int
         return
     job['status']='running'
     job['started_at']=time.time()
+    job['progress']=progress_snapshot(None,'preparing')
     jobs[key]=job
+    last_progress_commit = 0.0
+    last_progress_done = -1.0
+    def report_progress(phase, done=None, total=None):
+        nonlocal last_progress_commit, last_progress_done
+        timestamp=time.time()
+        # Prevent high-frequency Modal Dict writes during Whisper streaming.
+        # Phase changes are always recorded. Percent is based on decoded audio.
+        current=jobs.get(key)
+        if not current or current.get('status')!='running':
+            return
+        previous=current.get('progress')
+        next_event=progress_snapshot(previous,phase,done=done,total=total,now=timestamp)
+        changed=not previous or previous.get('phase')!=phase
+        ratio=(next_event.get('audio_done',0) / next_event['audio_total']
+               if next_event.get('audio_total') else 0.0)
+        if (not changed and timestamp-last_progress_commit<3 and
+                ratio-last_progress_done<0.025):
+            return
+        current['progress']=next_event
+        jobs[key]=current
+        last_progress_commit=timestamp
+        last_progress_done=ratio if phase=='asr' else -1.0
     try:
         data.reload()
         audio=Path('/data/jobs')/job_id/('source'+extension)
@@ -73,7 +97,8 @@ def transcribe_job(job_id: str, extension: str, diarization: bool, speakers: int
         with tempfile.TemporaryDirectory(prefix='transcriber-beta-') as tmp:
             archive,metrics=process(audio,Path(tmp)/'results','/models/whisper',config,
                                      token=os.environ.get('HF_TOKEN') if diarization else None,
-                                     stage='full')
+                                     stage='full',progress=report_progress)
+            report_progress('saving')
             weights.commit()
             raw_archive=archive.read_bytes()
             parsed=parse_original_archive(raw_archive)
