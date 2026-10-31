@@ -83,6 +83,20 @@ def run_synthetic():
         ("holdout_short_ack",
          [row(0, .2, "話者1", "うん"),
           row(.25, .9, "話者1", "了解しました")], []),
+        # A later probe set, chosen after observing over-merging in the first
+        # 18 synthetic cases. These probe examples are also development data.
+        ("probe_fragment_policy",
+         [row(0, .7, "話者1", "現行の制度については"),
+          row(.8, 1.8, "話者1", "見直しを行います。")], [0]),
+        ("probe_fragment_assembly",
+         [row(0, .7, "話者1", "会議の議事録を"),
+          row(.8, 1.8, "話者1", "作成してください。")], [0]),
+        ("probe_topic_discontinuity",
+         [row(0, .7, "話者1", "確認したい点は"),
+          row(.8, 1.8, "話者1", "それでは休憩に入ります")], []),
+        ("probe_new_topic",
+         [row(0, .7, "話者1", "次の案件を"),
+          row(.8, 1.8, "話者1", "今日はここまでにします")], []),
     ]
     output = []
     def infer(messages):
