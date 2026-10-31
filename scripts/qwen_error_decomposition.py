@@ -271,7 +271,7 @@ def compare_frozen_timing(reference, original, alternative, exclusive):
     """Timing-only comparison; same source characters AND same lexical token units."""
     first, second = extract_words(original), extract_words(alternative)
     if len(first) != len(second) or any(
-        normalized_ja(a["text"]) != normalized_ja(b["text"]) for a, b in zip(first, second)
+        a["text"] != b["text"] for a, b in zip(first, second)
     ):
         raise ValueError("Timing comparison changes words; refuses confounded result")
     return {"before": compare_arms(reference, original, exclusive)["arms"]["conservative_exclusive"],
