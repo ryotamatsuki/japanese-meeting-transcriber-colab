@@ -146,3 +146,37 @@
 .paragraph-edit:hover{background:#f5f4ff}
 .studio-subtoolbar{flex-wrap:wrap;row-gap:9px}
 @media(max-width:650px){.speaker-paragraph{padding:15px 12px}.paragraph-edit{margin-left:0}}
+
+/* Live progress: factual stage indicators, no invented 0-100% completion. */
+.processing-card{background:linear-gradient(130deg,#fff 0%,#fafaff 100%);border:1px solid #e4e5f2;border-radius:18px;box-shadow:0 10px 30px #2c316810;padding:27px 31px 22px;margin-bottom:25px}
+.processing-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}
+.processing-kicker{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:1.3px;font-weight:790;color:#7570ca;margin-bottom:12px}
+.processing-live-dot{width:7px;height:7px;border-radius:50%;background:#7468df}
+.processing-heading{min-width:0}
+.processing-heading h2{font-size:21px;font-weight:790;letter-spacing:-.5px;color:#252b42;margin:0 0 10px}
+.processing-file{font-size:12px;color:#8792a4;display:flex;gap:7px;align-items:center;flex-wrap:wrap;min-width:0;overflow-wrap:anywhere;margin:0}
+.processing-icon{width:43px;height:43px;border-radius:12px;background:#efedff;color:#7264d9;display:grid;place-items:center;flex:none}
+.processing-main{margin-top:27px}
+.processing-mainline{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:12px}
+.processing-mainline strong{font-size:14px;color:#303b50}
+.processing-percent{font-size:24px;letter-spacing:-.6px;color:#665cde;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.processing-percent small{font-size:10px;letter-spacing:0;color:#8995a8;font-weight:600;margin-left:5px}
+.processing-track{height:8px;background:#eaeaf4;border-radius:20px;position:relative;overflow:hidden}
+.processing-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,#7064df,#9080f1);transition:width .32s ease}
+.processing-track-unknown{background:#eeeef6}
+.processing-indeterminate{height:100%;width:30%;position:absolute;inset-block:0;left:0;border-radius:20px;background:linear-gradient(90deg,#b0a8f4,#7064dd);animation:kiroku-progress-indeterminate 1.8s cubic-bezier(.45,0,.55,1) infinite alternate}
+@keyframes kiroku-progress-indeterminate{from{transform:translateX(-110%)}to{transform:translateX(340%)}}
+.processing-meta{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-size:11px;color:#818ca0;margin-top:11px;font-variant-numeric:tabular-nums}
+.processing-meta span:last-child{display:flex;align-items:center;gap:5px}
+.processing-estimate{font-size:11px;line-height:1.75;font-weight:700;color:#6361aa;margin:13px 0 0}
+.processing-estimate small{color:#9098a8;font-weight:400}
+.processing-estimate.subtle{font-weight:400;color:#939baa}
+.processing-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));list-style:none;margin:25px 0 15px;padding:21px 0 0;border-top:1px solid #ececf4;gap:8px}
+.processing-steps li{display:flex;align-items:center;justify-content:center;gap:8px;font-size:11px;font-weight:650;white-space:nowrap}
+.processing-step-marker{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:10px;letter-spacing:0;font-weight:750;background:#f0f1f7;color:#9ca3b4}
+.processing-steps .step-done .processing-step-marker{background:#e3f4eb;color:#28855f}
+.processing-steps .step-active .processing-step-marker{background:#e9e6ff;color:#655bce;box-shadow:0 0 0 3px #f3f1ff}
+.processing-steps .step-upcoming{color:#a4aab8}
+.processing-footnote{font-size:11px;color:#8d98a8;margin:0;line-height:1.65;text-align:center}
+@media(max-width:750px){.processing-card{padding:21px 17px 20px}.processing-heading h2{font-size:18px}.processing-steps{gap:5px}.processing-steps li{gap:5px;font-size:10px;flex-direction:column}.processing-mainline{align-items:center}.processing-percent{font-size:21px}.processing-meta{font-size:10px}.processing-estimate small{display:block}}
+@media(prefers-reduced-motion:reduce){.processing-indeterminate{animation:none;width:100%;background:repeating-linear-gradient(90deg,#a79cf0 0 18px,#eeeefa 18px 36px)}.processing-fill{transition:none}}
