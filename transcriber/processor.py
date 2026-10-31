@@ -20,6 +20,7 @@ class Config:
     quality_experiment: bool = False
     overlap_review: bool = False  # beta UI: model-estimated overlap windows only
     speaker_cleanup_ms: int = 0
+    word_stability_ms: int = 0  # opt-in research; production remains unmodified
     asr_beam_size: int = 5
     asr_model: str = 'large-v3'  # research-only: faster-whisper turbo also supported
 
@@ -41,6 +42,10 @@ class Config:
             raise ValueError('quality_experiment and overlap_review must be boolean')
         if self.overlap_review and not self.enable_diarization:
             raise ValueError('overlap_review requires diarization')
+        if type(self.word_stability_ms) is not int or not 0 <= self.word_stability_ms <= 800:
+            raise ValueError('word_stability_ms must be between 0 and 800')
+        if self.word_stability_ms and (not self.quality_experiment or not self.enable_diarization):
+            raise ValueError('word-level speaker stabilization requires research mode and diarization')
         if type(self.speaker_cleanup_ms) is not int or not 0 <= self.speaker_cleanup_ms <= 300:
             raise ValueError('speaker_cleanup_ms must be between 0 and 300')
         if self.speaker_cleanup_ms and not self.quality_experiment:
@@ -76,8 +81,14 @@ def process(path, output_root, model_cache, config=None, token=None, stage='full
         diar_settings = diarize(job, config, token, metrics)
     if stage == 'full':
         merge_started = time.perf_counter()
-        job['utterances'], job['speaker_map'], job['word_count'] = assign_and_group(
-            job['asr_segments'], job['diar_segments'], config.enable_diarization)
+        # Never change the production baseline unless a research config opts in.
+        if config.word_stability_ms:
+            job['utterances'], job['speaker_map'], job['word_count'] = assign_and_group(
+                job['asr_segments'], job['diar_segments'], config.enable_diarization,
+                word_stability_ms=config.word_stability_ms)
+        else:
+            job['utterances'], job['speaker_map'], job['word_count'] = assign_and_group(
+                job['asr_segments'], job['diar_segments'], config.enable_diarization)
         if config.quality_experiment and config.enable_diarization:
             from .attribution_review import audit_word_speaker_assignments
             standard_path = outdir / "pyannote_通常話者区間.json"
