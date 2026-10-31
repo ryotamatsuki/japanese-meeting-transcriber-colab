@@ -108,7 +108,10 @@ def windows(rows: list[dict], *, window_size: int = MAX_WINDOW) -> list[dict]:
         right = min(len(rows), left + window_size)
         pairs = [i for i in range(left, right - 1)
                  if _merge_ok(rows[i], rows[i + 1])]
-        splits = [[i, j] for i in range(left, right)
+        # The shared boundary row appears again in the next window; propose a
+        # split in exactly one window to avoid duplicate model decisions.
+        split_end = right if right == len(rows) else right - 1
+        splits = [[i, j] for i in range(left, split_end)
                   for j in _split_options(rows[i])]
         if pairs or splits:
             spans.append({
