@@ -70,3 +70,26 @@ jobs:
             beta/react_dist/
             frontend/package-lock.json
           retention-days: 7
+
+  react-browser-copy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build React Studio for browser test
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Install headless Chromium
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Verify desktop and smartphone copy, formats and clipboard fallback
+        run: python scripts/browser_react_stage37_smoke.py
