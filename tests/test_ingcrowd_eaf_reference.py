@@ -17,7 +17,7 @@ def mock_eaf():
                 "ALIGNABLE_ANNOTATION",TIME_SLOT_REF1=f"ts{i}",
                 TIME_SLOT_REF2=f"ts{i+1}")
             ET.SubElement(a,"ANNOTATION_VALUE").text="会議ではない自然会話"
-    return ET.tostring(root,encoding="utf8")
+    return ET.tostring(root,encoding="utf-8")
 
 class IngcrowdReferenceLoaderTests(unittest.TestCase):
     def test_strict_two_speakers_and_bounded_timing(self):
