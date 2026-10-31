@@ -78,6 +78,12 @@ def main():
             desktop.screenshot(path=str(OUT/"dashboard.png"),full_page=True)
             desktop.get_by_role("button",name="編集する").first.click()
             desktop.get_by_role("heading",name="文字起こし",exact=True).wait_for()
+            # Stub only the OS clipboard; keep the actual React copy handler.
+            desktop.evaluate("""() => {
+                window.__lastCopiedTranscript = '';
+                Object.defineProperty(navigator, 'clipboard', {configurable: true,
+                    value: {writeText: async text => {window.__lastCopiedTranscript = text}}});
+            }""")
             assert desktop.locator("textarea").count()>0
             assert desktop.locator(".audio-dock").evaluate(
                 "(element) => {const b=element.getBoundingClientRect();"
@@ -103,7 +109,30 @@ def main():
             desktop.get_by_role("button",name="保存する").click()
             desktop.get_by_text("保存済み",exact=True).wait_for()
             assert desktop.get_by_role("link",name="ZIP出力").count()==1
+            # One-tap default: whole transcript with speaker labels and no times.
+            desktop.get_by_role("button",name="全文コピー").click()
+            copied=desktop.evaluate("window.__lastCopiedTranscript")
+            assert copied.startswith("司会者：UIテストのための編集です。"),copied[:100]
+            assert copied.count("\\n\\n")==69,"Copy must include all 70 rows, not only current page"
+            desktop.get_by_label("コピー形式").select_option("plain")
+            desktop.get_by_role("button",name="全文コピー").click()
+            copied=desktop.evaluate("window.__lastCopiedTranscript")
+            assert copied.startswith("UIテストのための編集です。")
+            assert "司会者：" not in copied
+            desktop.get_by_label("コピー形式").select_option("timed")
+            desktop.get_by_role("button",name="全文コピー").click()
+            assert desktop.evaluate("window.__lastCopiedTranscript").startswith("[00:00:00] 司会者：")
             desktop.get_by_label("発言を検索").fill("存在しない文字列")
+            desktop.get_by_role("button",name="全文コピー").click()
+            assert desktop.evaluate("window.__lastCopiedTranscript").count("\\n\\n")==69
+            # Clipboard-denied path remains usable with a selectable textarea.
+            desktop.evaluate("""() => {navigator.clipboard.writeText = async () => {
+                throw Error('clipboard blocked in browser smoke');
+            }}""")
+            desktop.get_by_role("button",name="全文コピー").click()
+            desktop.get_by_role("dialog",name="テキストを手動でコピー").wait_for()
+            assert desktop.get_by_label("コピー用の全文テキスト").input_value().startswith("[00:00:00] 司会者：")
+            desktop.get_by_role("button",name="コピー画面を閉じる").click()
             desktop.get_by_text("一致する発言がありません").wait_for()
             assert not errors,errors
             mobile=browser.new_page(viewport={"width":390,"height":844},device_scale_factor=1)
@@ -117,6 +146,15 @@ def main():
             mobile.get_by_role("button",name="メニューを閉じる").click()
             mobile.get_by_role("button",name="編集する").first.click()
             mobile.get_by_role("heading",name="文字起こし",exact=True).wait_for()
+            mobile.evaluate("""() => {
+                window.__lastCopiedTranscript = '';
+                Object.defineProperty(navigator, 'clipboard', {configurable: true,
+                    value: {writeText: async text => {window.__lastCopiedTranscript = text}}});
+            }""")
+            assert mobile.get_by_role("button",name="全文コピー").is_visible()
+            mobile.get_by_label("コピー形式").select_option("plain")
+            mobile.get_by_role("button",name="全文コピー").click()
+            assert mobile.evaluate("window.__lastCopiedTranscript").startswith(SAMPLES[0])
             assert mobile.locator(".audio-dock").is_visible()
             mobile.screenshot(path=str(OUT/"studio_mobile.png"),full_page=False)
             assert not mobile_errors,mobile_errors
