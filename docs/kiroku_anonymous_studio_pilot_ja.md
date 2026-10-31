@@ -1,3 +1,76 @@
+## 最新の実環境検証（2026-10-31）
+
+公開URL: https://ryota-matsuki--kiroku-anonymous-studio-beta-anonymous-web.us-east.modal.run/
+
+専用アプリ: `kiroku-anonymous-studio-beta`。mainへのマージなし。既存の非公開ベータ、研究用アプリ、国文祭アプリはデプロイ対象にしていない。ASRは既定のWhisper large-v3 / beam5のまま。Qwenへの置換なし。
+
+### 実環境で発見して修正した不具合
+
+1. frontend/package-lock.jsonが未保存で、デプロイ用npm ciが失敗。lockfileをコミットし、npm ciとReactビルドを再確認。
+2. Modalのコンソール出力が長いregional URLを折り返し、正規表現によるURL抽出が失敗。SDKのFunction.get_web_urlへ変更。最初のRun 41157947842はデプロイ成功後に検証前停止、GPU未実行。
+3. Run 41158060101では独立HTTPクライアント2件のアップロード・実GPU処理は完了したが、並列GET /rowsの片方で500。Modal保護ログで「there are open files preventing the operation: .../results.json is open」を確認。同期GETが別スレッドでVolume.reloadとファイル読み取りを重ねていた。
+4. 読み取り・書き込みを同じ非同期ロック内で直列化し、同期SDK処理はasyncio.to_threadで実行。音声はロック内でリクエスト専用ローカル一時ファイルへコピーし、FileResponse送信後に削除する。Volumeのファイルをストリーム中に開き続けない。Range再生を維持。
+5. 新規回帰2テストは旧実装で1 failure/1 error、修正後は成功。全172 offline tests成功。初回失敗を後からPASSに変更しない。
+6. ブラウザ試験の音声準備用FFmpegがGitHubランナーにないことを確認し、imageio-ffmpegを明示依存に追加。これらの準備失敗RunはGPU試験未実施。
+7. 匿名モードにも残っていた「パスワード認証」表示を「利用者別に分離／登録・パスワード不要」に変更。保持時間は「24時間経過後に順次削除」に修正し、毎時sweepに伴う遅延を隠さない。
+
+### 運用設定
+
+Modalトークンはユーザーの操作時点承認後に1日期限で新設し、対象リポジトリのActions Secretsへ登録。値はソース、PR、ログへ記載しない。`kiroku-anonymous-session`の署名鍵はランダム生成し、既存Secretは上書きしない。
+
+Workspace Usage limitは$30。確認時の残クレジット$25.48、当期$4.52 credits / $0 charges。Spend limit画面はDefault $0。0入力でもSaveは無効で、新たなcustom $0を保存したとは扱わない。Usage limitとクレジットは別々に確認し、全体usage capを30ドルより引き上げていない。Volume storageの課金停止までは保証しない。Usage alertsはEmail/In-appとも有効。main環境の通知にはMuted表示があった。
+
+### 検証の範囲
+
+二つの実物端末ではなく、Chromiumの独立browser contexts（PC 1440×1000、mobile 390×844）。各contextはCookie、localStorage等が別。許諾元: https://commons.wikimedia.org/wiki/File:Ja-LessonIntroKonPron-practice1.ogg （marsian自身がpublic domainとして公開）。元音源（ffprobe実測28.358617秒。配布ページ表記27秒）と8秒地点から切り出した12秒音源を使用。音源・ASR全文・ZIPは成果物として保存しない。画面証拠では本文を試験マーカーに置換。
+
+自然な24時間経過を待っての削除、実物iPhone/Safari、長時間会議の匿名版E2E、汎用的な文字認識・話者分離精度は今回の短音声試験で認定しない。毎時削除Functionのデプロイとretention単体テストは別の証拠として扱う。
+
+### 最終PASS（実GPU・実Chromium）
+
+[Run 41159119383](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41159119383) は全ステップsuccess。
+
+| 項目 | 結果 |
+| --- | --- |
+| 別Cookie・別ストレージの2ブラウザからUIアップロード | PASS |
+| 2つの異なるjob ID、各一覧は自分の1件のみ | PASS |
+| 大小2音源のA10実GPU（話者分離ON） | PASS |
+| 両方向の状態・音声・発言・確認・ZIP取得拒否 | PASS、404 |
+| 両方向の他人への編集PUT・DELETE拒否 | PASS、404 |
+| 各自のテキスト・話者名のUI編集・保存・再読込 | PASS |
+| 音声APIのSHA256と各自の入力ファイル一致 | PASS |
+| PC/mobile双方の再生・停止ボタン | PASS |
+| ブラウザダウンロードのTXT/CSV/SRT/JSON全形式 | PASS、各自マーカーあり・相手マーカーなし |
+| UI削除と削除後の状態・音声・結果・ZIPへの404 | PASS |
+| 両viewportで横はみ出しなし・JS例外なし | PASS |
+| 匿名署名Cookieの独立 | PASS |
+| Cookieなし401・不正CSRF403 | 実API Run 41158060101でPASS（そのRun全体は並行rowsでFAIL）、offlineでもPASS |
+| セッション失効・期限経過削除 | offlineテストのみ。実際の12h/24h経過は未実施 |
+
+数値は最終成功Runだけを採用:
+
+| 指標 | PC A | mobile B |
+| --- | ---: | ---: |
+| 音源秒数 | 28.358617 | 12.0 |
+| 発言数 | 3 | 1 |
+| pipeline_seconds | 13.311641212 | 15.170554529 |
+| gpu_task_seconds | 15.592784405 | 17.865192652 |
+
+2利用者の画面操作・待機・編集・ダウンロード・削除を含む試験全体は **76.333秒**。`gpu_task_seconds`はGPU関数内の開始記録から結果保存後までで、課金GPU秒やコンテナ起動待ちを含む壁時計全体とは同一視しない。GPU最大1コンテナのためGPU処理自体はキューに並ぶ。
+
+画面証拠Artifact `13026491234` / SHA256 `a9bd20c21f63449f25732e6b5dc6c0b46aca5c180bcc9d55ea3569d0e582d6ac`。ZIP内はPC/mobileのdashboard・本文置換済みeditor PNGと集計JSONのみ。ダウンロード後にSHA256を独立照合し、両編集画面を目視確認。モバイルで保存通知が再生を遮る不具合を修正し、同じライブ操作で再検証済み。
+
+初期失敗4GPUジョブと、最終成功2GPUジョブの合計6回を使用。URL抽出、停止済みendpoint、FFmpeg欠落、初期表示待機の失敗ではGPUは実行していない。試験のみの名前を持ち、全件deletedかつjob_indexが空であること、GPU受付履歴数と試験レコード数が一致することを条件に、試験メタデータと対応する試験受付履歴だけを清掃。全体4GPUジョブ/24hという制限は変更していない。最終清掃もPASS、通常利用の受付枠を試験消費で塞いだままにしていない。
+
+デプロイ成功: [Run 41158401082](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41158401082)。最終ブラウザRunでも同じ専用アプリを再デプロイし、修正済み版を検証。コードCI: [Run 41159121086](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41159121086) success（172テスト、Reactビルド等）。
+
+誤った通知表示の修正後、最初の待機5秒は起動・セッション応答の揺らぎを許容できずRun 41158964191が試験開始前にFAIL。初期UI待機を60秒とした最終Runは成功した。失敗を成功として数えない。
+
+今後の意図しないGPU起動を避けるため、終了時に両ワークフローのpush自動起動を外し、手動実行専用に戻す。workflow_dispatchはdefault branchに定義がない場合そのまま起動できないので、mainへ勝手に追加しない。次回は明示的に認証したModal CLIで対象ブランチをデプロイするか、承認された一時pushトリガーを使う。
+
+
+---
+
 # Kiroku Studio — 匿名セッション分離（限定試験版）
 
 ## 利用の流れ
