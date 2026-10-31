@@ -1,0 +1,104 @@
+name: ONE SHOT deploy Kiroku consecutive-speaker paragraphs
+on:
+  push:
+    branches:
+      - feature/kiroku-consecutive-speaker-paragraphs-20261101
+    paths:
+      - .github/workflows/once-deploy-speaker-paragraphs-20261101.yml
+permissions:
+  contents: read
+concurrency:
+  group: kiroku-anonymous-live-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: "github.event.head_commit.message == 'deploy: ship tested consecutive speaker paragraphs to live anonymous Studio'"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      KIROKU_BUDGET_VERIFIED: ${{ vars.KIROKU_BUDGET_VERIFIED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Protect budget, secrets, branch, and deployed application identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "feature/kiroku-consecutive-speaker-paragraphs-20261101"
+          test "${KIROKU_BUDGET_VERIFIED:-}" = yes || { echo "::error::Modal budget confirmation missing"; exit 2; }
+          test -n "${MODAL_TOKEN_ID:-}" && test -n "${MODAL_TOKEN_SECRET:-}" || { echo "::error::Modal credential missing"; exit 2; }
+          grep -F "modal.App('kiroku-anonymous-studio-beta')" beta_modal_anonymous.py
+          grep -F "kiroku-anonymous-studio-files-v1" beta_modal_anonymous.py
+          grep -F "kiroku-anonymous-studio-jobs-v1" beta_modal_anonymous.py
+          grep -F "kiroku-anonymous-session" beta_modal_anonymous.py
+          grep -F "groupConsecutiveSpeakerRows" frontend/src/App.tsx
+          echo "EXISTING_APP_AND_VOLUME_IDENTITY_PRESERVED=yes"
+      - name: Run deterministic grouping and export regression tests
+        run: |
+          node --experimental-strip-types --test frontend/tests/*.test.mjs
+          python -m unittest discover -s tests -p 'test_*.py' -q
+      - name: Build React static assets and verify bundled new UI before deployment
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund --prefix frontend
+          npm run build --prefix frontend
+          python - <<'PY'
+          from pathlib import Path
+          bundle=''.join(f.read_text(encoding='utf-8') for f in Path('beta/react_dist/assets').glob('*.js'))
+          assert '同じ話者をまとめて読む' in bundle, 'Expected UI absent from deployment bundle'
+          assert '発言単位で編集' in bundle, 'Original timestamps must remain editable'
+          print('PREDEPLOY_NEW_UI_BUNDLE_VERIFIED=yes')
+          PY
+      - name: Install fixed Modal SDK
+        run: python -m pip install modal==1.4.3 httpx==0.28.1
+      - name: Deploy updated assets and presenter only to EXISTING public anonymous Studio
+        shell: bash
+        run: |
+          set -euo pipefail
+          modal deploy beta_modal_anonymous.py
+          echo "MODAL_DEPLOY_COMMAND_FINISHED=yes"
+      - name: Verify live HTTPS anonymous session, JS bundle and existing data API
+        shell: bash
+        run: |
+          python - <<'PY'
+          import modal,httpx,re
+          url=modal.Function.from_name('kiroku-anonymous-studio-beta','anonymous_web').get_web_url()
+          assert url and url.startswith('https://') and url.endswith('.modal.run')
+          with httpx.Client(base_url=url,timeout=120,follow_redirects=True) as c:
+              page=c.get('/')
+              assert page.status_code==200,(page.status_code,page.text[:100])
+              found=re.findall(r'/ui/assets/[^"\s<>]+\.js',page.text)
+              assert found,'No JS bundle referenced by public app'
+              scripts=[]
+              for path in sorted(set(found)):
+                  response=c.get(path)
+                  assert response.status_code==200,(path,response.status_code)
+                  scripts.append(response.text)
+              combined=''.join(scripts)
+              assert '同じ話者をまとめて読む' in combined,'NEW_PARAGRAPH_UI_NOT_SERVING_LIVE'
+              assert '発言単位で編集' in combined,'EDITABLE_ORIGINAL_ROWS_MISSING'
+              session=c.get('/api/session')
+              assert session.status_code==200
+              assert session.json().get('anonymous') is True
+              jobs=c.get('/api/jobs')
+              assert jobs.status_code==200
+              assert isinstance(jobs.json().get('jobs'),list)
+          print('LIVE_VERIFIED_ANONYMOUS_BROWSER_BUNDLE=PASS')
+          print('LIVE_VERIFIED_NEW_SPEAKER_PARAGRAPH_UI=PASS')
+          print('LIVE_VERIFIED_EXISTING_USER_SESSION_AND_JOBS_API=PASS')
+          print('LIVE_URL='+url)
+          PY
+      - name: Record non-sensitive deployment verdict
+        if: always()
+        run: |
+          echo "Target: existing Modal app kiroku-anonymous-studio-beta, unchanged persistent Volume and Dict IDs" >> "$GITHUB_STEP_SUMMARY"
+          echo "Changed: deterministic same-speaker paragraph reading, copy and TXT export only; Whisper and Community-1 unchanged" >> "$GITHUB_STEP_SUMMARY"
+          echo "No upload/GPU task, no user audio or transcript exposed by verification" >> "$GITHUB_STEP_SUMMARY"
+          echo "Check live validation stage for successful completion; never infer success from deployment command alone." >> "$GITHUB_STEP_SUMMARY"
