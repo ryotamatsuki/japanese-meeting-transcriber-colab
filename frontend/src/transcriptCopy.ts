@@ -1,6 +1,6 @@
 /** Format the complete transcript for pasting into notes or messages.
  * Never use a paginated/filtered subset. This is a pure client-side operation. */
-import { groupConsecutiveSpeakerRows } from './speakerParagraphs'
+import { groupConsecutiveSpeakerRows } from './speakerParagraphs.ts'
 
 export type TranscriptCopyMode = 'speaker' | 'plain' | 'timed' | 'speaker-raw'
 export type TranscriptCopyRow = {
