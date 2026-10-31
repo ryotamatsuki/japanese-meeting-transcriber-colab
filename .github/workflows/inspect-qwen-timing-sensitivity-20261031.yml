@@ -1,0 +1,70 @@
+name: Research-only inspect one-shot timing sensitivity
+on:
+  pull_request:
+    branches: [research/open-audio-empirical-ablation-20261031]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    if: github.event.pull_request.number == 11
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Read single linked GPU workflow and NUMERIC ONLY result
+        run: |
+          python - <<'PY'
+          import json,os,subprocess,time,pathlib
+          repo=os.environ["GH_REPO"]
+          sha="3869b2550221fb920e7e97ede920c8053ec0fbe7"
+          workflow="once-qwen-timing-sensitivity-20261031.yml"
+          matching=[]
+          for attempt in range(40):
+              raw=subprocess.check_output([
+                  "gh","api","-X","GET",f"repos/{repo}/actions/workflows/{workflow}/runs",
+                  "-f","per_page=40"],text=True)
+              matching=[x for x in json.loads(raw).get("workflow_runs",[]) if
+                        x.get("head_sha")==sha and x.get("event")=="push"]
+              if matching:
+                  latest=max(matching,key=lambda x:x["id"])
+                  if latest["status"]=="completed":break
+              time.sleep(10)
+          if not matching:
+              print("GPU_ONE_SHOT_STATUS=NOT_FOUND");raise SystemExit(0)
+          run=max(matching,key=lambda x:x["id"])
+          print("GPU_ONE_SHOT_RUN",json.dumps({
+              "id":run["id"],"status":run["status"],"conclusion":run.get("conclusion"),
+              "url":run["html_url"]}))
+          if run.get("conclusion")!="success":
+              print("EVALUATION_NOT_COMPLETE_NO_NUMERIC_IMPROVEMENT_CLAIM")
+              raise SystemExit(0)
+          output_dir=pathlib.Path("/tmp/metrics")
+          output_dir.mkdir()
+          subprocess.run(["gh","run","download",str(run["id"]),
+                          "--name","jcre3-qwen-timing-sensitivity-metrics-only",
+                          "--dir",str(output_dir)],check=True)
+          files=list(output_dir.glob("*.json"))
+          if len(files)!=1:raise RuntimeError("Unexpected metric bundle")
+          data=json.loads(files[0].read_text())
+          if data["completed"] is not True or len(data["records"])!=3:
+              raise ValueError("No valid complete evaluation")
+          for rec in data["records"]:
+              if rec["status"]!="success":raise ValueError("Missing record")
+              e=rec["factorial_diagnostic"]
+              print("TIMING_FACTORIAL_NUMERIC_ONLY",json.dumps({
+                  "id":rec["record_id"],
+                  "legacy_cpcer":rec["baseline_original_cpcer"],
+                  "auto_safe_cpcer":e["auto_safe_max_overlap"]["cpcer"],
+                  "human_safe_cpcer":e["human_regions_safe_max_overlap_diagnostic"]["cpcer"],
+                  "human_conservative_cpcer":e["human_regions_conservative_diagnostic"]["cpcer"],
+                  "diar":rec["diarization_0_collar"],
+                  "sweep":[{"shift":x["relative_shift_seconds"],
+                            "auto_cpcer":x["auto_safe_overlap_cpcer"],
+                            "human_cpcer":x["human_regions_safe_overlap_cpcer"]}
+                           for x in e["relative_time_shift_sensitivity"]]
+              },ensure_ascii=False))
+          print("TIMING_SENSITIVITY_COMPLETED_3=yes")
+          PY
