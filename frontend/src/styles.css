@@ -108,3 +108,9 @@
 .preview-warning{display:flex;align-items:flex-start;gap:10px;background:#fff8e9;border:1px solid #e8d3a7;color:#6f5523;border-radius:10px;padding:13px 17px;font-size:12px;line-height:1.7;margin-bottom:22px}
 .preview-warning svg{flex-shrink:0;color:#a97818;margin-top:1px}
 .preview-warning strong{font-weight:800}
+
+/* Saved-state notices must not cover or block the persistent audio controls. */
+.toast{pointer-events:none}
+.toast button{pointer-events:auto}
+.app-shell:has(.editor-page) .toast{bottom:125px}
+@media(max-width:750px){.app-shell:has(.editor-page) .toast{bottom:165px;left:12px;right:12px;max-width:none}}
