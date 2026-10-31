@@ -122,6 +122,8 @@ def freeze_qwen():
                     text=normalized_ja("".join(w["text"] for w in extract_words(segmented)))
                     lex_sha=hashlib.sha256(text.encode()).hexdigest()
                     direct=permutation_cer(reference,baseline)
+                    flat=evaluate_cer("".join(x["text"] for x in reference),
+                        "".join(x["text"] for x in collected))
                     if direct["reference_characters"] < 500:
                         raise ValueError("Unexpectedly short human reference")
                     der=compare_diarization(reference,exclusive,collar=0.0)
@@ -142,6 +144,8 @@ def freeze_qwen():
                     sf.write(private_root/(rid+".wav"),wave,16000,subtype="PCM_16")
                     row.update({"status":"success",
                         "baseline_cpcer":direct["cpcer"],
+                        "flattened_cer":flat["normalized_cer"],
+                        "flattened_edits":flat["edit_distance"],
                         "baseline_DER":der["der_percent"],
                         "reference_chars":direct["reference_characters"],
                         "normalized_lexical_sha256":lex_sha,
