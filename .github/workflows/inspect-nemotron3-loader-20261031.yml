@@ -1,0 +1,53 @@
+name: Read Nemotron 3 synthetic loader result
+on:
+  pull_request:
+    branches: [research/qwen-time-diarization-sensitivity-20261031]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    if: github.event.pull_request.number == 12
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Read public-model synthetic-only loader status and metrics
+        run: |
+          python - <<'PY'
+          import subprocess,json,os,time,pathlib
+          repo=os.environ["GH_REPO"];wanted="a864f6272bfd657129420f5e392896a8505a8599"
+          workflow="once-nemotron3-loader-probe-20261031.yml"
+          selected=None
+          for _ in range(35):
+              v=subprocess.check_output(["gh","api","-X","GET",f"repos/{repo}/actions/workflows/{workflow}/runs","-f","per_page=30"],text=True)
+              hits=[x for x in json.loads(v).get("workflow_runs",[])
+                    if x["head_sha"]==wanted and x["event"]=="push"]
+              if hits:
+                  selected=max(hits,key=lambda x:x["id"])
+                  if selected["status"]=="completed":break
+              time.sleep(10)
+          print("NEMOTRON3_LOADER_RUN",json.dumps(
+            {k:selected.get(k) for k in ("id","status","conclusion","html_url")}
+            if selected else {"found":False}))
+          if not selected or selected["status"]!="completed":
+              print("NO_FINAL_MODEL_LOAD_RESULT");raise SystemExit(0)
+          jobs=json.loads(subprocess.check_output(["gh","api","-X","GET",
+              f"repos/{repo}/actions/runs/{selected['id']}/jobs"],text=True))
+          print("FAILED_STAGES",json.dumps([
+              x["name"] for j in jobs["jobs"] for x in j.get("steps",[])
+              if x.get("conclusion")=="failure"]))
+          arts=json.loads(subprocess.check_output(["gh","api","-X","GET",
+              f"repos/{repo}/actions/runs/{selected['id']}/artifacts"],text=True))
+          matches=[x for x in arts["artifacts"] if x["name"]=="nemotron3-synthetic-loader-metrics-only"]
+          if not matches:print("NO_NUMERIC_PROBE");raise SystemExit(0)
+          import pathlib
+          p=pathlib.Path("/tmp/probe");p.mkdir()
+          subprocess.run(["gh","run","download",str(selected["id"]),"--name",
+                matches[0]["name"],"--dir",str(p)],check=True)
+          rows=list(p.glob("*.json"))
+          if len(rows)!=1:raise RuntimeError("Bad probe artifact")
+          print("NEMOTRON3_SYNTHETIC_PROBE",rows[0].read_text())
+          PY
