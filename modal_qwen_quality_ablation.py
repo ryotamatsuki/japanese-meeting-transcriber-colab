@@ -14,7 +14,7 @@ image=(modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg","libsndfile1")
     .pip_install_from_requirements("requirements-modal.lock",
       extra_index_url="https://download.pytorch.org/whl/cu128")
-    .pip_install("qwen-asr==0.0.6","nagisa==0.2.11")
+    .pip_install("qwen-asr==0.0.6","nagisa==0.2.11","rapidfuzz==3.14.3")
     .run_commands(
       "python -c \"import pathlib,site; p=pathlib.Path(site.getsitepackages()[0])/'nvidia'; pathlib.Path('/etc/ld.so.conf.d/99-transcriber.conf').write_text('\\n'.join(str(d) for d in p.glob('*/lib')))\"",
       "ldconfig","python -m pip check")
