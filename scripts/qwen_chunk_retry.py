@@ -13,17 +13,23 @@ from scripts.evaluate_asr_cer import normalized_ja
 from scripts.qwen_timing_bridge import _restore_qwen_text_at_aligned_token_boundaries
 
 
-def infer_chunk(model, waveform, offset, *, sample_rate=16000, max_retries=2):
+def infer_chunk(model, waveform, offset, *, sample_rate=16000, max_retries=2,
+                max_chunk_seconds=38, context=''):
     if sample_rate != 16000 or len(waveform)<sample_rate:
         raise ValueError('Invalid audio chunk duration')
     seconds=len(waveform)/sample_rate
-    if not (math.isfinite(offset) and 0<=offset<=3600 and seconds<=38):
+    if not (math.isfinite(offset) and 0<=offset<=3600 and seconds<=max_chunk_seconds and 3<=max_chunk_seconds<=50):
         raise ValueError('Invalid audio chunk bounds')
     if type(max_retries) is not int or not 0<=max_retries<=2:
         raise ValueError('Retry bound exceeded')
     try:
-        result=model.transcribe(audio=(waveform,16000),language='Japanese',
-                                return_time_stamps=True)
+        from scripts.qwen_quality_experiments import checked_context
+        context=checked_context(context)
+        kwargs={'audio':(waveform,16000),'language':'Japanese',
+                'return_time_stamps':True}
+        if context:
+            kwargs['context']=context
+        result=model.transcribe(**kwargs)
         if len(result)!=1:
             raise ValueError('Qwen returned multiple predictions')
         one=result[0]
@@ -57,7 +63,8 @@ def infer_chunk(model, waveform, offset, *, sample_rate=16000, max_retries=2):
             raise ValueError('Qwen alignment failed after bounded retries') from None
         cut=len(waveform)//2
         left,meta_l=infer_chunk(model,waveform[:cut],offset,
-                                sample_rate=sample_rate,max_retries=max_retries-1)
+                                sample_rate=sample_rate,max_retries=max_retries-1,
+                                 max_chunk_seconds=max_chunk_seconds,context=context)
         right,meta_r=infer_chunk(model,waveform[cut:],offset+cut/sample_rate,
                                  sample_rate=sample_rate,max_retries=max_retries-1)
         return left+right,{
