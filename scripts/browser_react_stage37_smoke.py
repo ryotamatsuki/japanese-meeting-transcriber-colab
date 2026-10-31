@@ -113,7 +113,7 @@ def main():
             desktop.get_by_role("button",name="全文コピー").click()
             copied=desktop.evaluate("window.__lastCopiedTranscript")
             assert copied.startswith("司会者：UIテストのための編集です。"),copied[:100]
-            assert copied.count("\\n\\n")==69,"Copy must include all 70 rows, not only current page"
+            assert copied.count("\n\n")==69,"Copy must include all 70 rows, not only current page"
             desktop.get_by_label("コピー形式").select_option("plain")
             desktop.get_by_role("button",name="全文コピー").click()
             copied=desktop.evaluate("window.__lastCopiedTranscript")
@@ -124,7 +124,7 @@ def main():
             assert desktop.evaluate("window.__lastCopiedTranscript").startswith("[00:00:00] 司会者：")
             desktop.get_by_label("発言を検索").fill("存在しない文字列")
             desktop.get_by_role("button",name="全文コピー").click()
-            assert desktop.evaluate("window.__lastCopiedTranscript").count("\\n\\n")==69
+            assert desktop.evaluate("window.__lastCopiedTranscript").count("\n\n")==69
             # Clipboard-denied path remains usable with a selectable textarea.
             desktop.evaluate("""() => {navigator.clipboard.writeText = async () => {
                 throw Error('clipboard blocked in browser smoke');
