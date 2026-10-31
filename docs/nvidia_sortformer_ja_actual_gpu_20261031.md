@@ -1,4 +1,4 @@
-# 2026-10-31 実GPU比較: Community-1 vs Sortformer v2.1 — 開発用J-CRe3
+> **更新（2026-10-31）：Nemotron 3の失敗はNeMoモデルロード経路によるもので、Transformers経由の実音声評価に成功しました。** 本文の欠測記述は初回比較時点の履歴です。確定した三者比較は [nvidia_diarizer_three_way_actual_results_20261031.md](nvidia_diarizer_three_way_actual_results_20261031.md) を参照してください。\n\n# 2026-10-31 実GPU比較: Community-1 vs Sortformer v2.1 — 開発用J-CRe3
 
 **研究用 / Draft PR #12 / 本番未変更 / 独立した実会議テスト未実施。**
 実際のGPU比較: [GitHub Actions #41194301755](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41194301755)。
