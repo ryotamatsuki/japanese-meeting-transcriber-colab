@@ -143,12 +143,12 @@ class FourArmTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             check_features({"0":{"gap_seconds":1.0}},[0])
 
-    def test_invalid_row_unchanged(self):
-        with self.assertRaises(ValueError):
-            check_rows([r(0,2,"話者1","a"),r(1,3,"話者1","b")])
-        # start order may allow overlap; hard gate handles it instead
+    def test_overlapping_timestamps_retained_but_not_joinable(self):
         a=[r(0,2,"話者1","a"),r(1,3,"話者1","b")]
+        self.assertEqual(check_rows(a),a)
         self.assertFalse(hard_allowed(*a))
+        with self.assertRaises(ValueError):
+            check_rows([r(0,1,"話者1","a"),r(-1,2,"話者1","b")])
 
 
 if __name__ == "__main__":
