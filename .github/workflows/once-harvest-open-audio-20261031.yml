@@ -30,7 +30,7 @@ jobs:
           selected=None
           for trial in range(30):
               raw=subprocess.check_output([
-                 "gh","api",f"repos/{repo}/actions/workflows/{wf}/runs",
+                 "gh","api","-X","GET",f"repos/{repo}/actions/workflows/{wf}/runs",
                  "-f","per_page=30"],text=True)
               runs=json.loads(raw).get("workflow_runs",[])
               matches=[r for r in runs if r.get("head_sha")==sha and r.get("event")=="push"]
