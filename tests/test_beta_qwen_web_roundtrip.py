@@ -61,7 +61,8 @@ class QwenWebRoundtrip(unittest.TestCase):
                 archive=client.get('/api/jobs/'+jid+'/download')
                 self.assertEqual(archive.status_code,200)
                 with zipfile.ZipFile(io.BytesIO(archive.content)) as z:
-                    self.assertEqual(len(z.namelist()),4)
+                    self.assertEqual(len(z.namelist()),5)
+                    self.assertIn('文字起こし_発言単位.txt',z.namelist())
                     self.assertEqual(json.loads(z.read('文字起こし.json'))['utterances'],revised)
                     self.assertIn('参加者A: こんにちは。修正しました。',
                         z.read('文字起こし.srt').decode('utf-8'))
