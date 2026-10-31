@@ -19,7 +19,7 @@ jobs:
           python - <<'PY'
           import json,os,subprocess,time,pathlib
           repo=os.environ["GH_REPO"]
-          sha="e216b88779e335dc5083aed934149328dc63c505"
+          sha="098410a122f7286e04c13731c7e8721579b97e3c"
           workflow="once-ingcrowd-outofsample-20261031.yml"
           found=None
           for i in range(42):
@@ -76,6 +76,8 @@ jobs:
                     "completed":v.get("completed"),
                     "records":[{"id":r["record_id"],"status":r["status"],
                       "baseline_cpcer":r.get("baseline_cpcer"),
+                      "flattened_cer":r.get("flattened_cer"),
+                      "flattened_edits":r.get("flattened_edits"),
                       "baseline_DER":r.get("baseline_DER"),
                       "reference_chars":r.get("reference_chars"),
                       "tokens":r.get("tokens"),
