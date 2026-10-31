@@ -57,13 +57,14 @@ async def establish(client: httpx.AsyncClient):
     return result["csrf"]
 
 
-async def submit(client: httpx.AsyncClient, csrf: str, filename: str, data: bytes):
+async def submit(client: httpx.AsyncClient, csrf: str, filename: str, data: bytes, registry: list):
     headers = {"X-CSRF": csrf}
     response = await required(client, "POST", "/api/jobs", json={
         "filename": filename, "size": len(data), "diarization": False, "speakers": 0,
     }, headers=headers)
     job = response.json()["id"]
     check(len(job) == 32, "Job ID malformed")
+    registry.append((client, csrf, job))
     for offset in range(0, len(data), CHUNK):
         await required(client, "PUT", f"/api/jobs/{job}/chunks?offset={offset}",
                        content=data[offset:offset+CHUNK], headers=headers)
@@ -126,9 +127,8 @@ async def main():
         jobs = []
         try:
             job_a, job_b = await asyncio.gather(
-                submit(a, csrf_a, "anonymous-a.ogg", audio),
-                submit(b, csrf_b, "anonymous-b.ogg", audio))
-            jobs = [(a, csrf_a, job_a), (b, csrf_b, job_b)]
+                submit(a, csrf_a, "anonymous-a" + source.suffix.lower(), audio, jobs),
+                submit(b, csrf_b, "anonymous-b" + source.suffix.lower(), audio, jobs))
             results["both_jobs_submitted"] = True
             list_a, list_b = await asyncio.gather(
                 required(a, "GET", "/api/jobs"), required(b, "GET", "/api/jobs"))
