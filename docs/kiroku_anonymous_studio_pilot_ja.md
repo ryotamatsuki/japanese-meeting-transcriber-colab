@@ -41,3 +41,12 @@ modal deploy beta_modal_anonymous.py
 6. 既存のパスワード付きベータ・Reactビルド・Modalのインポートが正常に動く。
 
 これは**コードの分離機構**であり、全利用者向け公開の承認ではない。特にModalの請求上限が真のHard Spend Limitか、無制限なセッション発行・未完了アップロードによる妨害、レート制限、24時間物理削除、実GPU経由のE2E、自然音声の精度・速度、データ取り扱い許諾の確認は必要。公開前にこれらの不足を解消すること。
+
+## 2026-10-31 — Modal実デプロイ・2セッション実音声試験の準備
+
+- `.github/workflows/kiroku-anonymous-live.yml` を追加。ブランチの既存アプリとは独立した `beta_modal_anonymous.py` をデプロイし、Studio画面のビルド済みアセットを含める。デプロイ成功後に `scripts/smoke_anonymous_modal_live.py` を実行する。
+- 実験音源：Wikimedia Commonsのパブリックドメイン日本語音声（`Ja-LessonIntroKonPron-practice1.ogg`、約27秒）。利用許諾：https://commons.wikimedia.org/wiki/File:Ja-LessonIntroKonPron-practice1.ogg
+- 実環境試験では異なるCookie jarを持つ2つの独立したHTTPクライアントで、**同時アップロード→GPU処理待ち・完了→他人のファイルに404→発話1件を編集して保存→TXT/CSV/SRT/JSONのZIP検証→両ジョブ削除**を実施する。これは**2台の実物の端末ではなく、2つの独立した仮想クライアント**による並行E2Eであり、実スマートフォンとPCの操作検証は別途必要。
+- このワークフローは、GitHub ActionsリポジトリSecretsの `MODAL_TOKEN_ID` と `MODAL_TOKEN_SECRET`、管理者がModalの実画面で費用上限を確認したうえでGitHubリポジトリVariable `KIROKU_BUDGET_VERIFIED=yes` を設定した場合だけデプロイを許す。これは自己申告ゲートであり実予算の独立検証ではない。あわせてModal内Secret `kiroku-anonymous-session` の `BETA_SESSION_SECRET` と、既存 `transcriber-hf` の `HF_TOKEN` が必要。
+- 実験失敗時はデプロイ済みの匿名アプリを停止する処理を用意。成功時はアプリを保持し、公開URLをActionsのStep Summaryへ記録する。
+- [GitHub Actions Run 41155771547](https://github.com/ryotamatsuki/japanese-meeting-transcriber-colab/actions/runs/41155771547)：Python 170件PASS、ReactビルドPASS、スクリプト構文チェックPASS。ただしデプロイ前提の設定を値を表示せずに確認したところ **MODAL_DEPLOY_CREDENTIALS_CONFIGURED=no、KIROKU_BUDGET_APPROVAL_CONFIGURED=no**。そのため、この時点では実デプロイ・本物のGPU処理・ライブ2クライアントE2Eは**未実施**である。
