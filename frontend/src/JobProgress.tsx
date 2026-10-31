@@ -1,4 +1,4 @@
-import {Check, Clock3, Headphones, LoaderCircle} from 'lucide-react'
+import {AudioLines, Check, Clock3, Headphones} from 'lucide-react'
 import {durationLabel, processingSteps, progressInfo} from './progressModel'
 import type {ProgressJob} from './progressModel'
 
@@ -14,7 +14,7 @@ export function JobProgress({job,now}: {job:ProgressJob;now:number}) {
         <p className="processing-file" title={job.filename}><Headphones size={15}/>{job.filename}
           {job.duration ? <span>· 音声 {durationLabel(job.duration)}</span> : null}</p>
       </div>
-      <div className="processing-icon" aria-hidden="true"><LoaderCircle size={24} className="spin"/></div>
+      <div className="processing-icon" aria-hidden="true"><AudioLines size={24}/></div>
     </div>
     <div className="processing-main">
       <div className="processing-mainline" aria-live="polite" aria-atomic="true">
