@@ -54,6 +54,23 @@ jobs:
           import imageio_ffmpeg,subprocess
           subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),'-v','error','-i','local_audio/public-domain-a.ogg','-ss','8','-t','12','-c:a','libvorbis','local_audio/public-domain-b.ogg'],check=True)
           PY
+      - name: Reclaim only deleted pilot test jobs and their test quota
+        run: |
+          python - <<'PY'
+          import modal
+          state=modal.Dict.from_name('kiroku-anonymous-studio-jobs-v1')
+          allowed={'anonymous-a.ogg','anonymous-b.ogg','public-domain-a.ogg','public-domain-b.ogg'}
+          records=[(k,v) for k,v in state.items() if isinstance(k,str) and k.startswith('job:')]
+          if (len(records) not in (0,2,4) or state.get('job_index',[]) or
+              any(v.get('status')!='deleted' or v.get('filename') not in allowed for k,v in records) or
+              len(state.get('gpu_job_times',[]))!=len(records)):
+              raise SystemExit('Refuse quota cleanup: state contains unexpected or undeleted work')
+          # Only explicitly named, deleted jobs from this authorised pilot, no user workload.
+          print('Deleted pilot GPU pipeline seconds:',[value.get('pipeline_seconds') for key,value in records])
+          for key,value in records: state.pop(key)
+          state['gpu_job_times']=[]
+          print('Deleted pilot metadata and matching test quota reclaimed. Production limit remains 4/24h.')
+          PY
       - name: UI uploads, real GPU, owner isolation, edit, playback, ZIP and delete
         env:
           KIROKU_TEST_URL: ${{ steps.endpoint.outputs.url }}
@@ -61,26 +78,26 @@ jobs:
           KIROKU_TEST_AUDIO_B: local_audio/public-domain-b.ogg
         run: python scripts/browser_anonymous_modal_live.py
       - name: Upload sanitised browser evidence only
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: anonymous-studio-browser-sanitized
           path: local_runs/browser-anonymous/
           retention-days: 7
-      - name: Reclaim only deleted pilot test jobs and their test quota
-        if: success()
+      - name: Reclaim only deleted pilot test jobs and their test quota after success
         run: |
           python - <<'PY'
           import modal
           state=modal.Dict.from_name('kiroku-anonymous-studio-jobs-v1')
           allowed={'anonymous-a.ogg','anonymous-b.ogg','public-domain-a.ogg','public-domain-b.ogg'}
           records=[(k,v) for k,v in state.items() if isinstance(k,str) and k.startswith('job:')]
-          if (len(records)!=4 or state.get('job_index',[]) or
+          if (len(records) not in (0,2,4) or state.get('job_index',[]) or
               any(v.get('status')!='deleted' or v.get('filename') not in allowed for k,v in records) or
-              len(state.get('gpu_job_times',[]))!=4):
+              len(state.get('gpu_job_times',[]))!=len(records)):
               raise SystemExit('Refuse quota cleanup: state contains unexpected or undeleted work')
-          # Exactly the four deleted jobs from this authorised pilot, no user workload.
+          # Only explicitly named, deleted jobs from this authorised pilot, no user workload.
+          print('Deleted pilot GPU pipeline seconds:',[value.get('pipeline_seconds') for key,value in records])
           for key,value in records: state.pop(key)
           state['gpu_job_times']=[]
-          print('Deleted pilot metadata and four pilot quota entries reclaimed. Production limit remains 4/24h.')
+          print('Deleted pilot metadata and matching test quota reclaimed. Production limit remains 4/24h.')
           PY
