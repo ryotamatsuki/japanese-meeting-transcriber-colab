@@ -1,0 +1,70 @@
+name: One-shot licensed J-CRe3 Qwen four-arm A10
+on:
+  push:
+    branches: [research/qwen-prosody-boundary-fourarm-20261031]
+    paths:
+      - scripts/jcre3_reacquire_private.py
+      - modal_qwen_jcre3_fourarm.py
+      - .github/workflows/jcre3-fourarm-real-once.yml
+permissions:
+  contents: read
+concurrency:
+  group: kiroku-jcre3-fourarm-once-20261031
+  cancel-in-progress: false
+jobs:
+  jcre3-real-fourarm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      KIROKU_BUDGET_VERIFIED: ${{ vars.KIROKU_BUDGET_VERIFIED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Require previous budget authorization and configured Modal creds
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${MODAL_TOKEN_ID:-}" && test -n "${MODAL_TOKEN_SECRET:-}"
+          test "${KIROKU_BUDGET_VERIFIED:-}" = yes
+      - run: python -m pip install modal==1.4.3 playwright==1.56.0
+      - run: python -m playwright install --with-deps chromium
+      - name: Re-acquire official preview MP3 and references with pinned checksums
+        run: |
+          python scripts/jcre3_reacquire_private.py \
+            --manifest docs/jcre3_unseen_manifest_20261031.json \
+            --out "$RUNNER_TEMP/jcre3-private.zip"
+      - name: Upload verified input to isolated Modal volume, no public intake
+        run: |
+          python - <<'PYCODE'
+          import modal,os,pathlib
+          volume=modal.Volume.from_name('kiroku-jcre3-fourarm-audio-20261031-01',create_if_missing=True)
+          with volume.batch_upload() as batch:
+              batch.put_file(str(pathlib.Path(os.environ['RUNNER_TEMP'])/'jcre3-private.zip'),'/eval.zip')
+          print('PRIVATE_MODAL_CORPUS_UPLOADED')
+          PYCODE
+      - name: Single A10 run with all four arms and numeric-only metrics
+        run: modal run modal_qwen_jcre3_fourarm.py --output "$RUNNER_TEMP/fourarm-numeric.json"
+      - name: Check actual completion, not just successful workflow shell
+        run: |
+          python - <<'PYCODE'
+          import json,os,pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'fourarm-numeric.json'
+          r=json.loads(p.read_text())
+          assert r['recording_count']==3 and r['all_completed']
+          assert len(r['records'])==3
+          PYCODE
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: fourarm-jcre3-numeric-only
+          path: ${{ runner.temp }}/fourarm-numeric.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Erase only temporary corpus volume input
+        if: ${{ always() }}
+        continue-on-error: true
+        run: modal volume rm kiroku-jcre3-fourarm-audio-20261031-01 /eval.zip
