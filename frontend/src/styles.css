@@ -108,3 +108,30 @@
 .preview-warning{display:flex;align-items:flex-start;gap:10px;background:#fff8e9;border:1px solid #e8d3a7;color:#6f5523;border-radius:10px;padding:13px 17px;font-size:12px;line-height:1.7;margin-bottom:22px}
 .preview-warning svg{flex-shrink:0;color:#a97818;margin-top:1px}
 .preview-warning strong{font-weight:800}
+
+/* Saved-state notices must not cover or block the persistent audio controls. */
+.toast{pointer-events:none}
+.toast button{pointer-events:auto}
+.app-shell:has(.editor-page) .toast{bottom:125px}
+@media(max-width:750px){.app-shell:has(.editor-page) .toast{bottom:165px;left:12px;right:12px;max-width:none}}
+
+/* One-tap, plain-text transcript copying. ZIP export stays separate. */
+.copy-actions{display:inline-flex;align-items:center;gap:8px;min-width:0}
+.copy-actions select{height:42px;padding:0 10px;min-width:115px;max-width:150px;border:1px solid #dfe4ed;background:#fff;color:#3b4860;border-radius:9px;font-size:12px;font-weight:660}
+.copy-button{color:#5951c5;border-color:#cccaf6;background:#f5f4ff}
+.copy-button:hover:not(:disabled){background:#e9e7ff}
+.copy-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:#162137af;z-index:100}
+.copy-dialog{display:flex;flex-direction:column;gap:12px;background:#fff;color:#263349;width:100%;max-width:650px;max-height:90dvh;padding:22px;border-radius:14px;box-shadow:0 25px 75px #0003}
+.copy-dialog-header{display:flex;justify-content:space-between;align-items:center;gap:15px}
+.copy-dialog-header h2{font-size:17px;margin:0}
+.copy-dialog-header button{border:0;background:none;color:#68768d;display:grid;place-items:center;min-width:34px;min-height:34px}
+.copy-dialog p{color:#63718a;font-size:12px;line-height:1.8;margin:0}
+.copy-dialog textarea{display:block;flex:1;min-height:180px;height:42dvh;width:100%;resize:vertical;border:1px solid #d5dbea;border-radius:9px;padding:13px;color:#293245;font-size:13px;line-height:1.8;white-space:pre-wrap;user-select:text;-webkit-user-select:text}
+.copy-dialog>.outlined-button{align-self:flex-end}
+@media(max-width:750px){
+  .editor-actions .copy-actions{order:3;width:100%;display:flex}
+  .copy-actions select{flex:0 1 137px;min-width:109px}
+  .copy-actions .copy-button{flex:1;min-width:130px}
+  .copy-dialog{max-height:calc(100dvh - 24px);padding:16px}
+  .copy-dialog textarea{height:45dvh}
+}

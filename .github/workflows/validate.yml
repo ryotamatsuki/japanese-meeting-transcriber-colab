@@ -19,12 +19,29 @@ jobs:
         run: python tests/check_notebook.py
       - name: Run all offline regression and beta integration tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Report Modal deployment prerequisites without printing secrets
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          KIROKU_BUDGET_VERIFIED: ${{ vars.KIROKU_BUDGET_VERIFIED }}
+        shell: bash
+        run: |
+          if [[ -n "${MODAL_TOKEN_ID:-}" && -n "${MODAL_TOKEN_SECRET:-}" ]]; then
+            echo "MODAL_DEPLOY_CREDENTIALS_CONFIGURED=yes"
+          else
+            echo "MODAL_DEPLOY_CREDENTIALS_CONFIGURED=no"
+          fi
+          if [[ "${KIROKU_BUDGET_VERIFIED:-}" == "yes" ]]; then
+            echo "KIROKU_BUDGET_APPROVAL_CONFIGURED=yes"
+          else
+            echo "KIROKU_BUDGET_APPROVAL_CONFIGURED=no"
+          fi
       - name: Verify Modal SDK decorators and deployment module import
-        run: python -c 'import beta_modal; assert beta_modal.app is not None'
+        run: python -c 'import beta_modal, beta_modal_anonymous; assert beta_modal.app is not None and beta_modal_anonymous.app is not None'
       - name: Verify beta browser JavaScript syntax
         run: node --check beta/site.js
       - name: Verify Python syntax
-        run: python -m compileall -q beta beta_modal.py transcriber
+        run: python -m compileall -q beta beta_modal.py beta_modal_anonymous.py scripts/smoke_anonymous_modal_live.py transcriber
   react-build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -33,6 +50,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Test copy text formats for smartphone paste
+        run: node --experimental-strip-types --test frontend/tests/transcriptCopy.test.mjs
       - name: Install React frontend dependencies
         working-directory: frontend
         run: npm install --no-audit --no-fund
@@ -51,3 +70,26 @@ jobs:
             beta/react_dist/
             frontend/package-lock.json
           retention-days: 7
+
+  react-browser-copy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build React Studio for browser test
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Install headless Chromium
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Verify desktop and smartphone copy, formats and clipboard fallback
+        run: python scripts/browser_react_stage37_smoke.py

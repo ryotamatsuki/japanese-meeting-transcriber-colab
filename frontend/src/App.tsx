@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent, ReactNode } from 'react'
 import {
-  Activity, AlertCircle, ArrowRight, Check, CheckCheck, ChevronDown, ChevronLeft,
+  Activity, AlertCircle, ArrowRight, Check, CheckCheck, ChevronDown, ChevronLeft, Copy,
   ChevronRight, Clock3, CloudUpload, Download, FileAudio2, FileText, Headphones,
   LoaderCircle, LogOut, Menu, Mic2, Pause, Play, Plus, RotateCw, Save, Search,
   ShieldCheck, SlidersHorizontal, Trash2, Volume2, WandSparkles, X, RotateCcw, Pencil, ListChecks
 } from 'lucide-react'
+import { formatTranscriptForCopy } from './transcriptCopy'
+import type { TranscriptCopyMode } from './transcriptCopy'
 
 type JobStatus = 'uploading' | 'queued' | 'running' | 'complete' | 'failed' | 'deleted'
 type Job = { id: string; filename: string; status: JobStatus; received: number;
@@ -14,7 +16,7 @@ type Job = { id: string; filename: string; status: JobStatus; received: number;
 type Row = { start: number; end: number; speaker: string; text: string }
 type ReviewWindow = { id: string; start: number; end: number }
 type Review = { available: boolean; total_candidates: number; windows: ReviewWindow[]; reviewed_ids: string[] }
-type Session = { csrf: string; limits: { file_bytes: number; duration_seconds: number } }
+type Session = { csrf: string; anonymous?: boolean; limits: { file_bytes: number; duration_seconds: number } }
 const PREVIEW_ONLY = import.meta.env.VITE_PREVIEW_ONLY === 'true'
 const CHUNK = 4 * 1024 * 1024
 const PAGE = 60
@@ -24,7 +26,7 @@ async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.method && !['GET', 'HEAD'].includes(init.method.toUpperCase())) headers.set('X-CSRF', csrf)
   const res = await fetch(url, { ...init, headers, credentials: 'same-origin' })
-  if (res.status === 401) { window.location.assign('/login'); throw Error('ログインが必要です') }
+  if (res.status === 401) { window.location.assign('/'); throw Error('セッションの期限が切れました。ページを再読み込みしてください') }
   if (!res.ok) {
     let reason = 'HTTP ' + res.status
     try { const value = await res.json() as {detail?: string}; if (typeof value.detail === 'string') reason = value.detail } catch {}
@@ -81,6 +83,9 @@ export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false)
   const [actionId, setActionId] = useState<string | null>(null)
   const [notice, setNotice] = useState<{message: string; error?: boolean} | null>(null)
+  const [copyMode, setCopyMode] = useState<TranscriptCopyMode>('speaker')
+  const [manualCopyText, setManualCopyText] = useState<string | null>(null)
+  const manualCopyField = useRef<HTMLTextAreaElement | null>(null)
   const player = useRef<HTMLAudioElement | null>(null)
   const inputFile = useRef<HTMLInputElement | null>(null)
   const rowNodes = useRef(new Map<number, HTMLElement>())
@@ -107,6 +112,12 @@ export default function App() {
     void initialize()
     return () => { mounted = false }
   }, [refresh])
+  useEffect(() => {
+    if (manualCopyText !== null) {
+      manualCopyField.current?.focus()
+      manualCopyField.current?.select()
+    }
+  }, [manualCopyText])
   useEffect(() => {
     // The edit workspace must open at the top, not preserve a long dashboard's scroll position.
     window.scrollTo({top:0,behavior:'instant'})
@@ -192,6 +203,28 @@ export default function App() {
   function closeJob() {
     if (!abandon()) return
     setSelected(null); selectedId.current=null; setRows([]);setChanged(false);setReview(null);setPlaying(false)
+  }
+  function copyTranscript() {
+    // Copy all rows, never only the active search/filter or the current page.
+    // Call writeText directly from the click handler for Safari user activation.
+    const text = formatTranscriptForCopy(rows, copyMode)
+    if (!text) {
+      setNotice({message:'コピーできる発言がありません。',error:true})
+      return
+    }
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable')
+      void navigator.clipboard.writeText(text).then(
+        () => setNotice({message:'全文をコピーしました。LINEやメモに貼り付けできます。'}),
+        () => {
+          setManualCopyText(text)
+          setNotice({message:'自動コピーできませんでした。表示された文章を選択してコピーしてください。',error:true})
+        },
+      )
+    } catch {
+      setManualCopyText(text)
+      setNotice({message:'自動コピーできませんでした。表示された文章を選択してコピーしてください。',error:true})
+    }
   }
   function pick(f: File | null) { if (f) setFile(f) }
   function onDrop(e: DragEvent<HTMLDivElement>) { e.preventDefault();setDragging(false);pick(e.dataTransfer.files.item(0)) }
@@ -312,8 +345,8 @@ export default function App() {
           <FileAudio2 size={18}/><span><strong title={j.filename}>{j.filename}</strong><small>{statuses[j.status]?.label||j.status}</small></span>
           {j.status==='complete'&&<ChevronRight size={14}/>}</button>)}</div>
       <div className="sidebar-footer">
-        <div className="sidebar-privacy"><ShieldCheck size={18}/><div>{PREVIEW_ONLY ? 'UIデモ（実データなし）' : '非公開ワークスペース'}<small>{PREVIEW_ONLY ? 'アップロード・保存は無効' : '非機密音声のみ'}</small></div></div>
-        {!PREVIEW_ONLY&&<button onClick={()=>void logout()}><LogOut size={17}/> ログアウト</button>}
+        <div className="sidebar-privacy"><ShieldCheck size={18}/><div>{PREVIEW_ONLY ? 'UIデモ（実データなし）' : session?.anonymous ? 'あなた専用の一時作業領域' : '非公開ワークスペース'}<small>{PREVIEW_ONLY ? 'アップロード・保存は無効' : session?.anonymous ? '録音は24時間経過後に順次削除・非機密音声のみ' : '非機密音声のみ'}</small></div></div>
+        {!PREVIEW_ONLY&&!session?.anonymous&&<button onClick={()=>void logout()}><LogOut size={17}/> ログアウト</button>}
       </div>
     </aside>
     {mobileMenu&&<div className="sidebar-shade" onClick={()=>setMobileMenu(false)}/>}
@@ -321,7 +354,7 @@ export default function App() {
       <header className="topbar"><div className="breadcrumbs">
         <button className="menu-button" onClick={()=>setMobileMenu(true)} aria-label="メニューを開く"><Menu size={21}/></button>
         <span>ワークスペース</span><ChevronRight size={15}/><strong>{selected?'文字起こし編集':'ダッシュボード'}</strong>
-      </div><div className="topbar-side"><span className="private-tag"><i/> {PREVIEW_ONLY ? 'PUBLIC UI PREVIEW' : 'PRIVATE ALPHA'}</span><span className="avatar">K</span></div></header>
+      </div><div className="topbar-side"><span className="private-tag"><i/> {PREVIEW_ONLY ? 'PUBLIC UI PREVIEW' : session?.anonymous ? 'ANONYMOUS SESSION' : 'PRIVATE ALPHA'}</span><span className="avatar">K</span></div></header>
       <main className="workspace">
         {PREVIEW_ONLY&&<div className="preview-warning" role="status"><ShieldCheck size={19}/><span><strong>パスワード不要のデザインプレビュー</strong>　サンプル会議だけを表示しています。音声アップロード・AI推論・保存・ダウンロードは無効です。</span></div>}
         {!ready?<div className="loading"><LoaderCircle size={30} className="spin"/> 認証状態を確認しています…</div>:
@@ -335,6 +368,16 @@ export default function App() {
             <button id="save-transcript" className="primary-button" disabled={PREVIEW_ONLY||!changed||saving} onClick={()=>void save()}>{saving?<LoaderCircle size={17} className="spin"/>:<Save size={17}/>} 保存する</button>
             {PREVIEW_ONLY||changed||saving?<button className="outlined-button" disabled title={PREVIEW_ONLY?'公開プレビューでは出力できません':'先に変更を保存してください'}><Download size={17}/> ZIP出力</button>:
               <a className="outlined-button" href={'/api/jobs/'+selected.id+'/download'}><Download size={17}/> ZIP出力</a>}
+            <div className="copy-actions">
+              <label className="visually-hidden" htmlFor="copy-mode">コピー形式</label>
+              <select id="copy-mode" aria-label="コピー形式" value={copyMode} onChange={e=>setCopyMode(e.target.value as TranscriptCopyMode)}>
+                <option value="speaker">話者付き</option>
+                <option value="plain">発言のみ</option>
+                <option value="timed">時刻・話者付き</option>
+              </select>
+              <button type="button" className="outlined-button copy-button" disabled={!rows.some(r=>r.text.trim())}
+                onClick={copyTranscript}><Copy size={17}/> 全文コピー</button>
+            </div>
           </div></div>
           <div className="editing-grid"><section className="transcript-panel">
             <div className="panel-header studio-header"><div><h2>文字起こし</h2><p>音声を聞きながら、発言を確認・編集</p></div>
@@ -400,7 +443,7 @@ export default function App() {
             <p>音声をアップロードするだけ。AIが話者ごとに文字起こしし、確認と編集をひとつの画面で。</p></div>
           <div className="stats"><div className="stat-card"><span><FileText size={18}/> 完了した文字起こし</span><strong>{String(completedCount).padStart(2,'0')}</strong><small>保存中のファイル</small></div>
             <div className="stat-card"><span><Clock3 size={18}/> 現在の処理</span><strong className="stat-text">{running?statuses[running.status]?.label:'待機中'}</strong><small>同時実行は1件まで</small></div>
-            <div className="stat-card stat-secure"><span><ShieldCheck size={18}/> データの保護</span><strong className="stat-text">非公開</strong><small>パスワード認証・24時間保持</small></div></div>
+            <div className="stat-card stat-secure"><span><ShieldCheck size={18}/> データの保護</span><strong className="stat-text">{session?.anonymous ? '利用者別に分離' : '非公開'}</strong><small>{session?.anonymous ? '登録・パスワード不要' : 'パスワード認証・24時間保持'}</small></div></div>
           <section className="upload-panel"><div className="section-heading"><div><h2>新しい文字起こし</h2><p>会議音声をアップロードして、AI処理を開始します。</p></div><span className="step-mark">STEP 01 / 02</span></div>
             <div className={'drop-area'+(dragging?' is-dragging':'')+(file?' has-file':'')} role="button" tabIndex={0} aria-label="音声を選択"
               onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={onDrop}
@@ -430,8 +473,18 @@ export default function App() {
           <div className="safety-banner"><ShieldCheck size={21}/><p><strong>音声とデータの取り扱い</strong> 許諾済みの非機密音声のみを使用し、文字起こし結果は原音声と照合してください。</p></div>
         </div>}
       </main>
-      <footer className="app-footer"><span>Kiroku · Private Alpha v0.1</span><span>音声は最大24時間保管 · AIの出力には誤りが含まれる場合があります</span></footer>
+      <footer className="app-footer"><span>Kiroku · Private Alpha v0.1</span><span>音声は24時間経過後に順次削除 · AIの出力には誤りが含まれる場合があります</span></footer>
     </div>
     {notice&&<div className={'toast'+(notice.error?' toast-error':'')} role="status">{notice.error?<AlertCircle size={18}/>:<Check size={18}/>}<span>{notice.message}</span><button onClick={()=>setNotice(null)} aria-label="通知を閉じる"><X size={17}/></button></div>}
+    {manualCopyText!==null&&<div className="copy-overlay">
+      <div className="copy-dialog" role="dialog" aria-modal="true" aria-labelledby="copy-dialog-title">
+        <div className="copy-dialog-header"><h2 id="copy-dialog-title">テキストを手動でコピー</h2>
+          <button type="button" aria-label="コピー画面を閉じる" onClick={()=>setManualCopyText(null)}><X size={19}/></button></div>
+        <p>コピーが許可されなかったため、下の文章を長押しして「コピー」を選んでください。</p>
+        <textarea ref={manualCopyField} readOnly value={manualCopyText} aria-label="コピー用の全文テキスト"
+          onFocus={e=>e.currentTarget.select()} onClick={e=>e.currentTarget.select()}/>
+        <button type="button" className="outlined-button" onClick={()=>setManualCopyText(null)}>閉じる</button>
+      </div>
+    </div>}
   </div>
 }

@@ -1,13 +1,14 @@
-"""Single-user beta store. Modal Volume + Dict are injected; local fakes support offline testing.
+"""Session-scoped beta store. Modal Volume + Dict are injected; tests use fakes.
 
-The web deployment must use exactly one web container. A per-process async lock
-serializes state transitions. A distributed multi-user deployment requires a
-transactional queue, not this deliberately small beta implementation.
+All anonymous operations require an owner key derived from a signed session.
+One web container and its async lock serialize index/quota changes for this
+limited pilot; this is NOT a distributed transactional queue.
 """
 from __future__ import annotations
 import io
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -24,7 +25,9 @@ class StoreError(Exception):
 
 
 class FileBackend:
-    def __init__(self, root, state, launch=None, commit=None, refresh=None, probe=None):
+    def __init__(self, root, state, launch=None, commit=None, refresh=None, probe=None,
+                 require_owner=False):
+        self.require_owner=require_owner
         self.root=Path(root)
         self.state=state
         self.launch=launch
@@ -38,32 +41,54 @@ class FileBackend:
             raise StoreError('Invalid job ID',404)
         return self.root/id
 
-    def info(self, id):
+    def _check_owner(self, owner):
+        if self.require_owner and (not isinstance(owner,str) or
+                                   not re.fullmatch(r'[a-f0-9]{64}',owner)):
+            raise StoreError('Not found',404)
+
+    def info(self, id, *, owner=None):
+        self._check_owner(owner)
         if not valid_job_id(id):
             raise StoreError('Not found',404)
         job=self.state.get('job:'+id)
         if not job or job.get('status')=='deleted':
             raise StoreError('Not found',404)
+        if self.require_owner and not secrets.compare_digest(job.get('owner',''),owner):
+            # Identical response for a nonexistent job and another owner's job.
+            raise StoreError('Not found',404)
         if time.time()-job['created']>JOB_TTL_SECONDS:
             raise StoreError('Job has expired',410)
         return dict(job)
 
-    def list_jobs(self):
+    def list_jobs(self, *, owner=None):
+        self._check_owner(owner)
         valid=[]
         for id in self.state.get('job_index',[]):
             try:
-                valid.append(self.info(id))
+                valid.append(self.info(id,owner=owner))
             except StoreError:
                 continue
         return sorted(valid,key=lambda j:j['created'],reverse=True)
 
-    def new_job(self, name, size, diarization=True, speakers=0):
+    def new_job(self, name, size, diarization=True, speakers=0, *, owner=None):
+        self._check_owner(owner)
         suffix=validated_extension(name)
         if not isinstance(size,int) or type(size) is not int or not 0<size<=MAX_AUDIO_BYTES:
             raise StoreError('File must be 1 byte to 180 MiB')
         if type(diarization) is not bool or type(speakers) is not int or speakers not in (0,2,3,4):
             raise StoreError('Speaker setting must be auto, 2, 3, or 4')
-        current=self.list_jobs()
+        current=self.list_jobs(owner=owner)
+        if self.require_owner:
+            # Cap untrusted anonymous uploads *globally*, not just per cookie.
+            # The server serializes this check and job creation under one lock.
+            live=0
+            for key in self.state.get('job_index',[]):
+                entry=self.state.get('job:'+key)
+                if (entry and entry.get('status')!='deleted' and
+                        time.time()-entry['created']<JOB_TTL_SECONDS):
+                    live+=1
+            if live>=8:
+                raise StoreError('Server is busy. Try again after another job finishes.',429)
         if len(current)>=MAX_JOBS:
             raise StoreError('Two saved jobs maximum; delete a job before uploading another',429)
         if any(j['status'] in ('uploading','queued','running') for j in current):
@@ -77,13 +102,17 @@ class FileBackend:
         job={'id':id,'filename':Path(name).name[:120],'extension':suffix,
              'expected_size':size,'received':0,'status':'uploading','duration':None,
              'diarization':diarization,'speakers':speakers,'created':time.time()}
+        if self.require_owner:
+            job['owner']=owner
         self.state['job:'+id]=job
-        self.state['job_index']=[j['id'] for j in current]+[id]
+        # Keep the global index intact: an owner's filtered list cannot replace it.
+        existing=list(self.state.get('job_index',[])) if self.require_owner else [j['id'] for j in current]
+        self.state['job_index']=existing+[id]
         return job
 
-    def append_chunk(self,id,offset,data):
+    def append_chunk(self,id,offset,data,*,owner=None):
         from .core import CHUNK_BYTES
-        job=self.info(id)
+        job=self.info(id,owner=owner)
         if job['status']!='uploading':
             raise StoreError('Upload is not active',409)
         if type(offset) is not int or offset<0 or not data or len(data)>CHUNK_BYTES:
@@ -102,8 +131,8 @@ class FileBackend:
         self.state['job:'+id]=job
         return job
 
-    def finish(self,id):
-        job=self.info(id)
+    def finish(self,id,*,owner=None):
+        job=self.info(id,owner=owner)
         if job['status']!='uploading':
             raise StoreError('Upload is not active',409)
         self.refresh()
@@ -136,8 +165,8 @@ class FileBackend:
             self.state['job:'+id]=job
         return job
 
-    def source(self,id):
-        job=self.info(id)
+    def source(self,id,*,owner=None):
+        job=self.info(id,owner=owner)
         if job['status']=='uploading':
             raise StoreError('Upload not completed',409)
         self.refresh()
@@ -146,8 +175,8 @@ class FileBackend:
             raise StoreError('Audio unavailable',410)
         return p
 
-    def read_rows(self,id):
-        job=self.info(id)
+    def read_rows(self,id,*,owner=None):
+        job=self.info(id,owner=owner)
         if job['status']!='complete':
             raise StoreError('Results not ready',409)
         self.refresh()
@@ -157,8 +186,8 @@ class FileBackend:
             raise StoreError('Results unavailable',500)
         return json.loads(p.read_text(encoding='utf-8'))
 
-    def save_rows(self,id,rows):
-        job=self.info(id)
+    def save_rows(self,id,rows,*,owner=None):
+        job=self.info(id,owner=owner)
         if job['status']!='complete':
             raise StoreError('Results not ready',409)
         valid=normalize_edits(rows,job['duration'])
@@ -170,8 +199,8 @@ class FileBackend:
         self.commit()
         return valid
 
-    def review_windows(self,id):
-        job=self.info(id)
+    def review_windows(self,id,*,owner=None):
+        job=self.info(id,owner=owner)
         if job['status']!='complete':
             raise StoreError('Results not ready',409)
         self.refresh()
@@ -186,12 +215,14 @@ class FileBackend:
         allowed={w['id'] for w in stored['windows']}
         return {**stored,'reviewed_ids':sorted(set(reviewed)&allowed)}
 
-    def set_reviewed(self,id,window_id,reviewed):
+    def set_reviewed(self,id,window_id,reviewed,*,owner=None):
+        # Ownership is checked before any candidate or filesystem access.
+        self.info(id,owner=owner)
         if type(reviewed) is not bool:
             raise StoreError('reviewed must be boolean')
         if not isinstance(window_id,str):
             raise StoreError('Invalid candidate ID',400)
-        record=self.review_windows(id)
+        record=self.review_windows(id,owner=owner)
         if window_id not in {x['id'] for x in record['windows']}:
             raise StoreError('Candidate not found',404)
         checked=set(record['reviewed_ids'])
@@ -206,12 +237,12 @@ class FileBackend:
         self.commit()
         return {'id':window_id,'reviewed':reviewed,'reviewed_count':len(checked)}
 
-    def get_download(self,id):
-        job=self.info(id)
-        return build_export(self.read_rows(id),source_name=job['filename'])
+    def get_download(self,id,*,owner=None):
+        job=self.info(id,owner=owner)
+        return build_export(self.read_rows(id,owner=owner),source_name=job['filename'])
 
-    def delete(self,id):
-        job=self.info(id)
+    def delete(self,id,*,owner=None):
+        job=self.info(id,owner=owner)
         if job['status'] in ('running','queued'):
             # Never delete a file a GPU worker may be reading.
             raise StoreError('Processing is active. Delete after completion.',409)
