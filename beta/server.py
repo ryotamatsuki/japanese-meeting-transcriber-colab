@@ -1,6 +1,8 @@
-"""Authenticated, same-origin FastAPI UI for a private single-user transcription beta."""
+"""Same-origin FastAPI UI supporting isolated anonymous sessions and legacy password beta."""
 from __future__ import annotations
 import asyncio
+import hashlib
+import hmac
 import html
 import os
 import time
@@ -16,9 +18,11 @@ BASE = Path(__file__).parent
 REACT_DIST = BASE / 'react_dist'
 
 
-def create_app(backend, *, password: str, session_secret: str):
-    if len(password)<16 or len(session_secret)<32:
-        raise ValueError('Provide a strong BETA_PASSWORD (16+ chars) and BETA_SESSION_SECRET (32+ chars)')
+def create_app(backend, *, password: str | None = None, session_secret: str, anonymous=False):
+    if len(session_secret)<32 or (not anonymous and (password is None or len(password)<16)):
+        raise ValueError('Provide a strong session secret and, for password mode, 16+ character password')
+    if anonymous and not getattr(backend,'require_owner',False):
+        raise ValueError('Anonymous mode requires a fail-closed owner-enforcing backend')
     app=FastAPI(title='Meeting Transcriber Private Beta', docs_url=None,
                 redoc_url=None,openapi_url=None)
     lock=asyncio.Lock()
@@ -44,6 +48,17 @@ def create_app(backend, *, password: str, session_secret: str):
             raise HTTPException(401,'Authentication required')
         return tok
 
+    def owner_for(req):
+        if not anonymous:
+            return None
+        token=require_auth(req)
+        # A stable internal owner ID without storing the bearer cookie in metadata.
+        return hmac.new(session_secret.encode(),('owner:'+token).encode(),hashlib.sha256).hexdigest()
+
+    def public_job(job):
+        # Owner IDs are authorization metadata, never public API fields.
+        return {k:v for k,v in job.items() if k!='owner'}
+
     def require_write(req):
         tok=require_auth(req)
         if not secrets.compare_digest(req.headers.get('X-CSRF',''),csrf_for(session_secret,tok)):
@@ -66,10 +81,12 @@ def create_app(backend, *, password: str, session_secret: str):
 
     @app.get('/healthz')
     def health():
-        return {'status':'running','public':False}
+        return {'status':'running','public':anonymous}
 
     @app.get('/login',response_class=HTMLResponse)
     def login_page():
+        if anonymous:
+            return RedirectResponse('/',status_code=303)
         return HTMLResponse((BASE/'login.html').read_text(encoding='utf-8'))
 
     @app.get('/login.css')
@@ -79,6 +96,8 @@ def create_app(backend, *, password: str, session_secret: str):
 
     @app.post('/login')
     async def login(req:Request):
+        if anonymous:
+            raise HTTPException(404,'Not found')
         import urllib.parse
         ip=req.client.host if req.client else 'unknown'
         key='login_attempts:'+ip
@@ -111,12 +130,20 @@ def create_app(backend, *, password: str, session_secret: str):
 
     @app.get('/')
     def home(req:Request):
-        if not verify_session(session_secret,req.cookies.get('beta_session','')):
+        token=req.cookies.get('beta_session','')
+        valid=verify_session(session_secret,token)
+        if not valid and not anonymous:
             return RedirectResponse('/login',status_code=303)
         ui = REACT_DIST/'index.html'
         if not ui.is_file():
             ui = BASE/'site.html'  # Legacy UI retained until a production React build exists.
-        return HTMLResponse(ui.read_text(encoding='utf-8'))
+        response=HTMLResponse(ui.read_text(encoding='utf-8'))
+        if anonymous and not valid:
+            # A fresh, unguessable, signed browser identity on first visit.
+            token=make_session(session_secret)
+            response.set_cookie('beta_session',token,max_age=12*3600,httponly=True,
+                                secure=True,samesite='strict',path='/')
+        return response
 
     @app.get('/ui/{asset_path:path}')
     def react_assets(req:Request,asset_path:str):
@@ -145,14 +172,15 @@ def create_app(backend, *, password: str, session_secret: str):
     @app.get('/api/session')
     def session(req:Request):
         tok=require_auth(req)
-        return {'csrf':csrf_for(session_secret,tok),'limits':{'file_bytes':MAX_AUDIO_BYTES,
+        return {'csrf':csrf_for(session_secret,tok),'anonymous':anonymous,
+            'limits':{'file_bytes':MAX_AUDIO_BYTES,
             'chunk_bytes':CHUNK_BYTES,'duration_seconds':3600,'saved_jobs':2,'gpu_jobs_24h':4},
             'beta_note':'Machine output; human verification required. Do not upload confidential audio.'}
 
     @app.get('/api/jobs')
     def jobs(req:Request):
         require_auth(req)
-        return {'jobs':safe(backend.list_jobs)}
+        return {'jobs':[public_job(j) for j in safe(backend.list_jobs,owner=owner_for(req))]}
 
     @app.post('/api/jobs')
     async def create(req:Request):
@@ -163,8 +191,9 @@ def create_app(backend, *, password: str, session_secret: str):
         try:
             data=__import__('json').loads(body)
             async with lock:
-                return safe(backend.new_job,data['filename'],data['size'],
-                            data.get('diarization',True),data.get('speakers',0))
+                return public_job(safe(backend.new_job,data['filename'],data['size'],
+                            data.get('diarization',True),data.get('speakers',0),
+                            owner=owner_for(req)))
         except (ValueError,KeyError,TypeError):
             raise HTTPException(400,'Invalid job details') from None
 
@@ -178,30 +207,30 @@ def create_app(backend, *, password: str, session_secret: str):
             if len(body)>CHUNK_BYTES:
                 raise HTTPException(413,'Chunk exceeds 4 MiB')
         async with lock:
-            return safe(backend.append_chunk,id,offset,bytes(body))
+            return public_job(safe(backend.append_chunk,id,offset,bytes(body),owner=owner_for(req)))
 
     @app.post('/api/jobs/{id}/finish')
     async def finish(req:Request,id:str):
         require_write(req)
         async with lock:
-            return safe(backend.finish,id)
+            return public_job(safe(backend.finish,id,owner=owner_for(req)))
 
     @app.get('/api/jobs/{id}')
     def status(req:Request,id:str):
         require_auth(req)
-        return safe(backend.info,id)
+        return public_job(safe(backend.info,id,owner=owner_for(req)))
 
     @app.get('/api/jobs/{id}/audio')
     def audio(req:Request,id:str):
         require_auth(req)
-        path=safe(backend.source,id)
+        path=safe(backend.source,id,owner=owner_for(req))
         import mimetypes
         return FileResponse(path,media_type=mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
 
     @app.get('/api/jobs/{id}/rows')
     def rows(req:Request,id:str):
         require_auth(req)
-        return {'rows':safe(backend.read_rows,id)}
+        return {'rows':safe(backend.read_rows,id,owner=owner_for(req))}
 
     @app.put('/api/jobs/{id}/rows')
     async def save(req:Request,id:str):
@@ -212,14 +241,14 @@ def create_app(backend, *, password: str, session_secret: str):
         try:
             data=__import__('json').loads(content)
             async with lock:
-                return {'rows':safe(backend.save_rows,id,data['rows'])}
+                return {'rows':safe(backend.save_rows,id,data['rows'],owner=owner_for(req))}
         except (KeyError,ValueError,TypeError):
             raise HTTPException(400,'Invalid transcript payload') from None
 
     @app.get('/api/jobs/{id}/review')
     def get_review(req:Request,id:str):
         require_auth(req)
-        return safe(backend.review_windows,id)
+        return safe(backend.review_windows,id,owner=owner_for(req))
 
     @app.put('/api/jobs/{id}/review/{window_id}')
     async def set_review(req:Request,id:str,window_id:str):
@@ -234,12 +263,12 @@ def create_app(backend, *, password: str, session_secret: str):
         except (ValueError,TypeError,KeyError):
             raise HTTPException(400,'Invalid review flag') from None
         async with lock:
-            return safe(backend.set_reviewed,id,window_id,body['reviewed'])
+            return safe(backend.set_reviewed,id,window_id,body['reviewed'],owner=owner_for(req))
 
     @app.get('/api/jobs/{id}/download')
     def download(req:Request,id:str):
         require_auth(req)
-        payload=safe(backend.get_download,id)
+        payload=safe(backend.get_download,id,owner=owner_for(req))
         return Response(payload,media_type='application/zip',headers={
             'Content-Disposition':'attachment; filename="transcript_edits.zip"'})
 
@@ -247,7 +276,7 @@ def create_app(backend, *, password: str, session_secret: str):
     async def delete(req:Request,id:str):
         require_write(req)
         async with lock:
-            safe(backend.delete,id)
+            safe(backend.delete,id,owner=owner_for(req))
         return {'ok':True}
 
     return app
