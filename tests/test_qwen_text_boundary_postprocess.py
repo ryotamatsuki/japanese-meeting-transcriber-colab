@@ -44,6 +44,21 @@ class BoundaryPostprocessTests(unittest.TestCase):
         self.assertEqual(o["status"], "rejected_preserved_original")
         self.assertEqual(o["rows"], r)
 
+    def test_completed_sentence_even_without_pause_not_joined(self):
+        r = [row(0, .7, "話者1", "確認しました。"),
+             row(.8, 1.9, "話者1", "次の議題です。")]
+        self.assertEqual(run_second_pass(r, responder([0]))["rows"], r)
+
+    def test_rapid_acknowledgements_never_joined(self):
+        r = [row(0, .2, "話者1", "はい"),
+             row(.25, .6, "話者1", "はい")]
+        self.assertEqual(run_second_pass(r, responder([0]))["rows"], r)
+
+    def test_reply_prefix_never_joined(self):
+        r = [row(0, .9, "話者1", "次の方は"),
+             row(1, 1.9, "話者1", "はい、こちらです。")]
+        self.assertEqual(run_second_pass(r, responder([0]))["rows"], r)
+
     def test_long_silence_is_not_joined(self):
         r = [row(0, 1, "話者1", "話題A"), row(4, 5, "話者1", "話題B")]
         self.assertEqual(run_second_pass(r, responder([0]))["rows"], r)
