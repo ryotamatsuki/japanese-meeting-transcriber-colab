@@ -280,6 +280,37 @@ def compare_frozen_timing(reference, original, alternative, exclusive):
             "warning": "No human word timestamps: change in cpCER is a downstream diagnostic, not timing accuracy."}
 
 
+def mark_qwen_timing_origins(chunks, segments, duration):
+    """Annotate aligner provenance WITHOUT claiming accuracy or changing times.
+
+    Only direct aligner output is 'aligned_unverified'. Equal-length lexical
+    substitutions are 'realigned'; end-of-file placeholders are 'estimated'.
+    Invalid tokens should already be rejected by qwen_segments.
+    """
+    result = [{**s, "words": [dict(w) for w in s["words"]]} for s in segments]
+    cursor = 0
+    for chunk in chunks:
+        items = chunk.get("items") or []
+        if not items:
+            continue
+        if cursor >= len(result) or len(items) != len(result[cursor]["words"]):
+            raise ValueError("Chunk-to-alignment token mapping cannot be proven")
+        realigned = normalized_ja(chunk["text"]) != normalized_ja(
+            "".join(str(item["text"]) for item in items))
+        for word, raw in zip(result[cursor]["words"], items):
+            raw_onset = float(chunk["offset_sec"]) + float(raw["start_time"])
+            tail_placeholder = (raw_onset >= float(duration) - 0.0005
+                                and word["end"] >= float(duration) - 0.001
+                                and word["start"] >= float(duration) - 0.002)
+            word["timing_origin"] = ("estimated" if tail_placeholder
+                                     else "realigned" if realigned
+                                     else "aligned_unverified")
+        cursor += 1
+    if cursor != len(result):
+        raise ValueError("Unmapped aligned segment, cannot attest provenance")
+    return result
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--eaf", type=Path, required=True)
@@ -295,7 +326,7 @@ def main():
     raw = json.loads(a.qwen.read_text(encoding="utf-8"))
     segments, integrity = qwen_segments(raw["chunks"], raw["duration_seconds"],
         speech_end_seconds=raw.get("speech_end_seconds"))
-    exclusive = _read_segments(a.exclusive)
+    segments = mark_qwen_timing_origins(raw["chunks"], segments, raw["duration_seconds"])\n    exclusive = _read_segments(a.exclusive)
     regular = _read_segments(a.regular) if a.regular else None
     result = compare_arms(reference, segments, exclusive, regular=regular, oracle=True)
     result["reference_sha256"] = reference_sha
@@ -304,7 +335,7 @@ def main():
         alt = json.loads(a.timing_alternative.read_text(encoding="utf-8"))
         alt_segments, _ = qwen_segments(alt["chunks"], alt["duration_seconds"],
             speech_end_seconds=alt.get("speech_end_seconds"))
-        result["timing_comparison"] = compare_frozen_timing(reference, segments, alt_segments, exclusive)
+        alt_segments = mark_qwen_timing_origins(alt["chunks"], alt_segments, alt["duration_seconds"])\n        result["timing_comparison"] = compare_frozen_timing(reference, segments, alt_segments, exclusive)
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"reference_sha256": reference_sha, "word_count": result["word_count"],
