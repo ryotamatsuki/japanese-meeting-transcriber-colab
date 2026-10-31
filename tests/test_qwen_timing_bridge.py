@@ -54,6 +54,14 @@ class QwenTimingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'did not preserve'):
             qwen_segments(data,6)
 
+    def test_recording_silence_is_not_mistaken_for_missing_speech(self):
+        data=sample()
+        with self.assertRaises(ValueError):qwen_segments(data,10)
+        _,metrics=qwen_segments(data,10,speech_end_seconds=6)
+        self.assertEqual(metrics['aligned_tokens'],4)
+        for boundary in (9,11,0,float('nan')):
+            with self.assertRaises(ValueError):qwen_segments(data,10,speech_end_seconds=boundary)
+
     def test_rejects_late_missing_tail(self):
         data=sample()
         data.pop()
