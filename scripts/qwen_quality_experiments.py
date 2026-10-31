@@ -166,6 +166,43 @@ def retain_distinct_overlap_tokens(tokens, *, tolerance_sec=0.12):
             result.append(item)
     return result,removed
 
+
+def build_bounded_review_queue(rows, flags, *, max_share=0.15, hard_cap=12):
+    """Research-only, metadata-only priority queue; not proof of error.
+
+    Reviewing every speaker boundary is impractical. This function limits
+    alerts and keeps original text untouched, even if alternatives exist.
+    """
+    if not 0 < max_share <= 0.3 or not 1 <= hard_cap <= 40:
+        raise ValueError("Invalid review budget")
+    budget=min(hard_cap,max(1,int(math.ceil(len(rows)*max_share)))) if rows else 0
+    priorities={
+        "overlap_speech_review":0,
+        "timestamp_overlap_review":1,
+        "important_number":2,
+        "long_low_text":3,
+        "long_gap_review":4,
+        "speaker_boundary_review":5,
+        "diarization_boundary_review":6,
+    }
+    options=[]
+    for f in flags:
+        index=f.get("index")
+        if not isinstance(index,int) or not 0 <= index < len(rows):
+            raise ValueError("Review index outside transcript")
+        reasons=sorted(set(f.get("reasons") or []))
+        if not reasons:
+            continue
+        row=rows[index]
+        options.append((min(priorities.get(r,9) for r in reasons),index,{
+           "utterance_index":index,
+           "start":float(row["start"]),
+           "end":float(row["end"]),
+           "reasons":reasons,"status":"要確認",
+        }))
+    options.sort(key=lambda item:(item[0],item[1]))
+    return [row for _,__,row in options[:budget]]
+
 def research_summary(records):
     """Keep artifact numeric-only; reject accidental transcript fields."""
     deny=("text","transcript","speaker_name","audio","filename","path","context","token",
