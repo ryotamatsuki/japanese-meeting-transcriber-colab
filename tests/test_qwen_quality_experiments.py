@@ -4,7 +4,7 @@ import unittest
 from scripts.qwen_quality_experiments import (
     checked_context, diagnose_review_candidates, oracle_exclusive_intervals,
     edit_components, paired_median_bootstrap, prefer_original_if_uncertain,
-    research_summary,
+    research_summary, retain_distinct_overlap_tokens,
 )
 
 
@@ -70,6 +70,29 @@ class QualityResearchTests(unittest.TestCase):
         for key in ("transcript","context","token_value","raw_text","original_filename"):
             with self.assertRaises(ValueError,msg=key):
                 research_summary([{key:"secret"}])
+
+    def test_overlap_boundary_dedup_preserves_other_speaker(self):
+        tokens=[
+            {"text":"はい","start":5.00,"end":5.20,"speaker":"話者1"},
+            {"text":"はい","start":5.02,"end":5.21,"speaker":"話者1"},
+            {"text":"はい","start":5.02,"end":5.21,"speaker":"話者2"},
+            {"text":"はい","start":6.00,"end":6.20,"speaker":"話者1"},
+        ]
+        kept,n=retain_distinct_overlap_tokens(tokens)
+        self.assertEqual(n,1)
+        self.assertEqual(len(kept),3)
+        self.assertEqual(kept[1]["speaker"],"話者2")
+        self.assertEqual(kept[2]["start"],6.0)
+
+    def test_empty_and_invalid_overlap_tokens(self):
+        kept,n=retain_distinct_overlap_tokens([
+            {"text":"、","start":0,"end":.1,"speaker":"話者1"},
+            {"text":"、","start":0,"end":.1,"speaker":"話者1"}])
+        self.assertEqual(len(kept),2)
+        self.assertEqual(n,0)
+        with self.assertRaises(ValueError):
+            retain_distinct_overlap_tokens([
+                {"text":"はい","start":1,"end":0,"speaker":"話者1"}])
 
     def test_invalid_timing_fail_closed(self):
         with self.assertRaises(ValueError):
