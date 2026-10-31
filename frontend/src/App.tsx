@@ -312,7 +312,7 @@ export default function App() {
           <FileAudio2 size={18}/><span><strong title={j.filename}>{j.filename}</strong><small>{statuses[j.status]?.label||j.status}</small></span>
           {j.status==='complete'&&<ChevronRight size={14}/>}</button>)}</div>
       <div className="sidebar-footer">
-        <div className="sidebar-privacy"><ShieldCheck size={18}/><div>{PREVIEW_ONLY ? 'UIデモ（実データなし）' : session?.anonymous ? 'あなた専用の一時作業領域' : '非公開ワークスペース'}<small>{PREVIEW_ONLY ? 'アップロード・保存は無効' : session?.anonymous ? '録音は24時間後に自動削除・非機密音声のみ' : '非機密音声のみ'}</small></div></div>
+        <div className="sidebar-privacy"><ShieldCheck size={18}/><div>{PREVIEW_ONLY ? 'UIデモ（実データなし）' : session?.anonymous ? 'あなた専用の一時作業領域' : '非公開ワークスペース'}<small>{PREVIEW_ONLY ? 'アップロード・保存は無効' : session?.anonymous ? '録音は24時間経過後に順次削除・非機密音声のみ' : '非機密音声のみ'}</small></div></div>
         {!PREVIEW_ONLY&&!session?.anonymous&&<button onClick={()=>void logout()}><LogOut size={17}/> ログアウト</button>}
       </div>
     </aside>
@@ -400,7 +400,7 @@ export default function App() {
             <p>音声をアップロードするだけ。AIが話者ごとに文字起こしし、確認と編集をひとつの画面で。</p></div>
           <div className="stats"><div className="stat-card"><span><FileText size={18}/> 完了した文字起こし</span><strong>{String(completedCount).padStart(2,'0')}</strong><small>保存中のファイル</small></div>
             <div className="stat-card"><span><Clock3 size={18}/> 現在の処理</span><strong className="stat-text">{running?statuses[running.status]?.label:'待機中'}</strong><small>同時実行は1件まで</small></div>
-            <div className="stat-card stat-secure"><span><ShieldCheck size={18}/> データの保護</span><strong className="stat-text">非公開</strong><small>パスワード認証・24時間保持</small></div></div>
+            <div className="stat-card stat-secure"><span><ShieldCheck size={18}/> データの保護</span><strong className="stat-text">{session?.anonymous ? '利用者別に分離' : '非公開'}</strong><small>{session?.anonymous ? '登録・パスワード不要' : 'パスワード認証・24時間保持'}</small></div></div>
           <section className="upload-panel"><div className="section-heading"><div><h2>新しい文字起こし</h2><p>会議音声をアップロードして、AI処理を開始します。</p></div><span className="step-mark">STEP 01 / 02</span></div>
             <div className={'drop-area'+(dragging?' is-dragging':'')+(file?' has-file':'')} role="button" tabIndex={0} aria-label="音声を選択"
               onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={onDrop}
@@ -430,7 +430,7 @@ export default function App() {
           <div className="safety-banner"><ShieldCheck size={21}/><p><strong>音声とデータの取り扱い</strong> 許諾済みの非機密音声のみを使用し、文字起こし結果は原音声と照合してください。</p></div>
         </div>}
       </main>
-      <footer className="app-footer"><span>Kiroku · Private Alpha v0.1</span><span>音声は最大24時間保管 · AIの出力には誤りが含まれる場合があります</span></footer>
+      <footer className="app-footer"><span>Kiroku · Private Alpha v0.1</span><span>音声は24時間経過後に順次削除 · AIの出力には誤りが含まれる場合があります</span></footer>
     </div>
     {notice&&<div className={'toast'+(notice.error?' toast-error':'')} role="status">{notice.error?<AlertCircle size={18}/>:<Check size={18}/>}<span>{notice.message}</span><button onClick={()=>setNotice(null)} aria-label="通知を閉じる"><X size={17}/></button></div>}
   </div>
