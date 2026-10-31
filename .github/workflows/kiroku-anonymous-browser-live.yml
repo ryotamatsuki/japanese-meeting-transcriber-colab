@@ -1,8 +1,5 @@
 name: Kiroku anonymous Studio - real Chromium desktop and mobile GPU E2E (cold-start tolerant)
 on:
-  push:
-    branches: [feature/kiroku-anonymous-isolation-20261031]
-    paths: [.github/workflows/kiroku-anonymous-browser-live.yml]
   workflow_dispatch:
 permissions:
   contents: read
