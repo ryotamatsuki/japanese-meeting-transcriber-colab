@@ -298,10 +298,13 @@ def mark_qwen_timing_origins(chunks, segments, duration):
         realigned = normalized_ja(chunk["text"]) != normalized_ja(
             "".join(str(item["text"]) for item in items))
         for word, raw in zip(result[cursor]["words"], items):
-            raw_onset = float(chunk["offset_sec"]) + float(raw["start_time"])
-            tail_placeholder = (raw_onset >= float(duration) - 0.0005
-                                and word["end"] >= float(duration) - 0.001
-                                and word["start"] >= float(duration) - 0.002)
+            offset = float(chunk["offset_sec"])
+            onset = float(raw["start_time"])
+            raw_end = max(onset+0.01, float(raw["end_time"]))
+            # Exactly mirror qwen_segments' clamping/rounding trigger.
+            clamped_a = round(max(0.0, offset+onset), 3)
+            clamped_b = round(min(float(duration), offset+raw_end), 3)
+            tail_placeholder = clamped_b <= clamped_a
             word["timing_origin"] = ("estimated" if tail_placeholder
                                      else "realigned" if realigned
                                      else "aligned_unverified")
