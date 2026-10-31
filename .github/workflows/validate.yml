@@ -50,6 +50,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Test copy text formats for smartphone paste
+        run: node --experimental-strip-types --test frontend/tests/transcriptCopy.test.mjs
       - name: Install React frontend dependencies
         working-directory: frontend
         run: npm install --no-audit --no-fund
