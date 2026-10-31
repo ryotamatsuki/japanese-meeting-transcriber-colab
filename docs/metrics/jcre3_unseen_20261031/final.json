@@ -1,0 +1,155 @@
+{
+  "dataset": "J-CRe3",
+  "source_revision": "61814236abf16258c7fb9778e32e660c1602ecfa",
+  "bundle_sha256": "ec83653e440a2707781443298549c3f92cb22c1930294eec10f9a83c03f15d31",
+  "license": "CC BY-SA 4.0",
+  "audio_representation": "Box-generated preview MP3; original WAV download not successfully transferred",
+  "scope": "two-person acted household task dialogue, not an administrative meeting",
+  "model_training_exposure": "unknown",
+  "model": "Qwen/Qwen3-ASR-1.7B",
+  "chunk_seconds": 30,
+  "context_used": false,
+  "records": [
+    {
+      "record_id": "20220302-56130322-0",
+      "status": "success",
+      "audio_seconds": 69.474125,
+      "audio_sha256": "f77a1ce6ae752db0977cf891c69408cdbfee56a293146f3d46b0f2a31707fcbd",
+      "reference_sha256": "be192142f857609d870dd50d8ca361efc8ff3824db00140bd89223267a30daa2",
+      "reference_turns": 14,
+      "detected_speech_end_seconds": 53.49096875,
+      "reference_speech_end_seconds_diagnostic": 53.539,
+      "diarization_seconds": 7.468443432999999,
+      "upstream_chunks": 3,
+      "chunk_layout": [
+        {
+          "offset_seconds": 0,
+          "duration_seconds": 34.233125
+        },
+        {
+          "offset_seconds": 34.233125,
+          "duration_seconds": 28.8841875
+        },
+        {
+          "offset_seconds": 63.1173125,
+          "duration_seconds": 6.3568125
+        }
+      ],
+      "chunks": 3,
+      "bounded_retries": 0,
+      "cpcer": 0.514018691588785,
+      "cpcer_edits": 110,
+      "reference_normalized_characters": 214,
+      "flattened_cer": 0.1261682242990654,
+      "insertions": 6,
+      "deletions": 8,
+      "substitutions": 13,
+      "aligned_tokens": 127,
+      "tail_seconds": 68.087,
+      "inference_and_eval_seconds": 4.727790464000002
+    },
+    {
+      "record_id": "20220303-56130205-1",
+      "status": "success",
+      "audio_seconds": 147.4003125,
+      "audio_sha256": "daad08e15393d3e118a7d06e3795b85b80ace4d7d32339af8d983204e41453a1",
+      "reference_sha256": "1433e9b6aebd280cdf9104fb9a12d6ba48f3ec9c4f869f37923319322153875a",
+      "reference_turns": 23,
+      "detected_speech_end_seconds": 146.40471875,
+      "reference_speech_end_seconds_diagnostic": 146.37,
+      "diarization_seconds": 4.603616252999998,
+      "upstream_chunks": 6,
+      "chunk_layout": [
+        {
+          "offset_seconds": 0,
+          "duration_seconds": 26.228
+        },
+        {
+          "offset_seconds": 26.228,
+          "duration_seconds": 28.4635625
+        },
+        {
+          "offset_seconds": 54.6915625,
+          "duration_seconds": 33.0634375
+        },
+        {
+          "offset_seconds": 87.755,
+          "duration_seconds": 29.5770625
+        },
+        {
+          "offset_seconds": 117.3320625,
+          "duration_seconds": 30.06825
+        }
+      ],
+      "chunks": 5,
+      "bounded_retries": 0,
+      "cpcer": 0.4485049833887043,
+      "cpcer_edits": 135,
+      "reference_normalized_characters": 301,
+      "flattened_cer": 0.03322259136212625,
+      "insertions": 0,
+      "deletions": 4,
+      "substitutions": 6,
+      "aligned_tokens": 164,
+      "tail_seconds": 146.292,
+      "inference_and_eval_seconds": 5.670381837999997
+    },
+    {
+      "record_id": "20220304-56132112-1",
+      "status": "success",
+      "audio_seconds": 161.1465,
+      "audio_sha256": "f6b196ff54881daee4df022d9eb96bb143212d98a3fa306c5cdeaeb5fdd398da",
+      "reference_sha256": "712d0ac21ac46d6aa68a9385f2d5c669eab28c1175d24a190f6df92b0320088b",
+      "reference_turns": 22,
+      "detected_speech_end_seconds": 161.20409375,
+      "reference_speech_end_seconds_diagnostic": 161.146,
+      "diarization_seconds": 5.5941235119999995,
+      "upstream_chunks": 6,
+      "chunk_layout": [
+        {
+          "offset_seconds": 0,
+          "duration_seconds": 34.7275
+        },
+        {
+          "offset_seconds": 34.7275,
+          "duration_seconds": 32.4086875
+        },
+        {
+          "offset_seconds": 67.1361875,
+          "duration_seconds": 25.1383125
+        },
+        {
+          "offset_seconds": 92.2745,
+          "duration_seconds": 27.168125
+        },
+        {
+          "offset_seconds": 119.442625,
+          "duration_seconds": 27.918375
+        },
+        {
+          "offset_seconds": 147.361,
+          "duration_seconds": 13.7855
+        }
+      ],
+      "chunks": 6,
+      "bounded_retries": 1,
+      "cpcer": 0.411371237458194,
+      "cpcer_edits": 123,
+      "reference_normalized_characters": 299,
+      "flattened_cer": 0.07357859531772576,
+      "insertions": 4,
+      "deletions": 12,
+      "substitutions": 6,
+      "aligned_tokens": 177,
+      "tail_seconds": 160.481,
+      "inference_and_eval_seconds": 6.870156317000003
+    }
+  ],
+  "successful_records": 3,
+  "median_cpcer": 0.4485049833887043,
+  "micro_cpcer": 0.4520884520884521,
+  "model_load_seconds": 8.727585119,
+  "gpu_function_seconds": 43.674024588,
+  "commercial_ready": false,
+  "warning": "New project-level pilot recordings; acted household dialogue and transcoded previews, not an administrative meeting acceptance test."
+}
