@@ -20,7 +20,7 @@ jobs:
           python - <<'PY'
           import json,os,subprocess,time,pathlib
           repo=os.environ["GH_REPO"]
-          wanted="0995d182b6130442770c75ee26ef8f071c9184f5"
+          wanted="e14c147b8b751400f9a5fb4bcf7581d6236ac7b6"
           wf="once-nvidia-diarizer-20261031.yml"
           selected=None
           for attempt in range(40):
