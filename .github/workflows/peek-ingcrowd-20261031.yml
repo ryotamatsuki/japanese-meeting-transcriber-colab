@@ -24,7 +24,7 @@ jobs:
             "-f","per_page=40"],text=True)
           xs=[x for x in json.loads(txt)["workflow_runs"]
               if x.get("event")=="push" and
-                 x.get("head_sha")=="e216b88779e335dc5083aed934149328dc63c505"]
+                 x.get("head_sha")=="098410a122f7286e04c13731c7e8721579b97e3c"]
           if not xs:print("INDEPENDENT_GPU_NOT_FOUND");raise SystemExit()
           r=max(xs,key=lambda z:z["id"])
           print("INDEPENDENT_GPU_RUN",json.dumps(
