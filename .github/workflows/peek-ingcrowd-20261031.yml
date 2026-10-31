@@ -1,0 +1,41 @@
+name: Inspect ongoing independent A10 evaluation
+on:
+  pull_request:
+    branches: [research/nemotron3-sortformer-jcre3-20261031]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  status:
+    if: github.event.pull_request.number == 13
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Read isolated experiment stage and status
+        run: |
+          python - <<'PY'
+          import subprocess,json,os
+          repo=os.environ["GH_REPO"]
+          txt=subprocess.check_output(["gh","api","-X","GET",
+            f"repos/{repo}/actions/workflows/once-ingcrowd-outofsample-20261031.yml/runs",
+            "-f","per_page=40"],text=True)
+          xs=[x for x in json.loads(txt)["workflow_runs"]
+              if x.get("event")=="push" and
+                 x.get("head_sha")=="098410a122f7286e04c13731c7e8721579b97e3c"]
+          if not xs:print("INDEPENDENT_GPU_NOT_FOUND");raise SystemExit()
+          r=max(xs,key=lambda z:z["id"])
+          print("INDEPENDENT_GPU_RUN",json.dumps(
+                {k:r.get(k) for k in ["id","status","conclusion","html_url"]}))
+          jobs=json.loads(subprocess.check_output(["gh","api","-X","GET",
+               f"repos/{repo}/actions/runs/{r['id']}/jobs"],text=True))
+          print("GPU_STAGES",json.dumps([
+                {"name":s["name"],"status":s["status"],
+                 "conclusion":s.get("conclusion")}
+                for j in jobs["jobs"] for s in j.get("steps",[])
+                if ("Acquire ONLY" in s["name"] or "Actual A10" in s["name"]
+                    or "Compare Community" in s["name"] or "Destroy ALL" in s["name"])
+          ]))
+          PY

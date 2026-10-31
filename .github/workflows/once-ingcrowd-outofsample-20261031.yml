@@ -1,0 +1,98 @@
+name: ONE-SHOT out-of-sample Japanese spontaneous dialogue model comparison
+on:
+  push:
+    branches:
+      - research/independent-ingcrowd-dialogue-20261031
+    paths:
+      - .github/workflows/once-ingcrowd-outofsample-20261031.yml
+permissions:
+  contents: read
+concurrency:
+  group: once-ingcrowd-independent-dialogue-20261031
+  cancel-in-progress: false
+jobs:
+  independent:
+    if: "github.event.head_commit.message == 'research: rerun held-out Japanese natural dialogue after WAV size fix'"
+    runs-on: ubuntu-latest
+    timeout-minutes: 52
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: 
+          python-version: '3.11'
+      - name: Check explicit research-only data restrictions and GPU credentials
+        run: |
+          test -n "${MODAL_TOKEN_ID:-}" && test -n "${MODAL_TOKEN_SECRET:-}"
+          test "${GITHUB_REF_NAME}" = research/independent-ingcrowd-dialogue-20261031
+          echo "DATA_LICENSE=CC-BY-NC-4.0; USER_DATA_COMMERCIAL_USE=PROHIBITED; FILES=PRIVATE; MODELS=FROZEN"
+      - name: Install acquisition client
+        run: |
+          python -m pip install modal==1.4.3 huggingface_hub==0.36.0 hf-xet soundfile==0.13.1
+      - name: Acquire ONLY pinned independent open natural-dialogue human references
+        run: |
+          python -m scripts.ingcrowd_fetch_private --purpose noncommercial-research --out /tmp/independent-dialogue-private.zip
+          python - <<'PY'
+          import json,zipfile,hashlib
+          with zipfile.ZipFile("/tmp/independent-dialogue-private.zip") as z:
+              m=json.loads(z.read("manifest.json"))
+              assert m["license"]=="cc-by-nc-4.0"
+              assert m["use"]=="noncommercial_research_only"
+              assert len(m["records"])==3
+              for r in m["records"]:
+                  rid=r["id"]
+                  assert hashlib.sha256(z.read(rid+"/"+rid+"_audio.wav")).hexdigest()==r["audio_sha256"]
+                  assert hashlib.sha256(z.read(rid+"/"+rid+".eaf")).hexdigest()==r["reference_sha256"]
+          print("INDEPENDENT_AUDIO_AND_HUMAN_EAF_HASHES_MATCH_6=yes")
+          PY
+      - name: Stage temporary research-only inputs on isolated Modal volume
+        run: |
+          modal deploy modal_ingcrowd_frozen_qwen.py
+          modal volume put kiroku-ingcrowd-holdout-20261031-01 /tmp/independent-dialogue-private.zip /eval.zip
+      - name: Actual A10 Qwen3-ASR and Community-1 freeze on new real conversations
+        run: |
+          modal run modal_ingcrowd_frozen_qwen.py --output /tmp/ingcrowd-frozen-metrics-only.json
+          python - <<'PY'
+          import json
+          m=json.load(open("/tmp/ingcrowd-frozen-metrics-only.json"))
+          assert m["completed"] and len(m["records"])==3,m.get("warning")
+          assert all(r["status"]=="success" for r in m["records"])
+          print("INDEPENDENT_NATURAL_DIALOGUE_3_ASR_REFERENCE_COMPLETE=yes")
+          PY
+      - name: Compare Community-1, Sortformer v2.1, Nemotron 3 on same A10 inputs
+        run: |
+          modal deploy modal_ingcrowd_threeway.py
+          modal run modal_ingcrowd_threeway.py --output /tmp/ingcrowd-model-metrics-only.json
+          python - <<'PY'
+          import json
+          x=json.load(open("/tmp/ingcrowd-model-metrics-only.json"))
+          assert len(x["records"])==3
+          assert all("community" in v for v in x["records"])
+          print("INDEPENDENT_COMPARISON_COMPLETE",x["all_completed"])
+          PY
+      - name: Upload ONLY numeric aggregate data; NEVER original data or text
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingcrowd-independent-threeway-numeric-only
+          path: |
+            /tmp/ingcrowd-frozen-metrics-only.json
+            /tmp/ingcrowd-model-metrics-only.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Stop research apps and destroy ALL private audio, reference, transcript and inputs
+        if: always()
+        shell: bash
+        run: |
+          modal app stop --yes kiroku-ingcrowd-headtohead-20261031-01 || true
+          modal app stop --yes kiroku-ingcrowd-holdout-20261031-01 || true
+          V=kiroku-ingcrowd-holdout-20261031-01
+          modal volume rm "$V" /eval.zip || true
+          for id in japanese-themed-dialogue01 japanese-themed-dialogue04 japanese-themed-dialogue07; do
+            modal volume rm "$V" "/frozen/$id.json" || true
+            modal volume rm "$V" "/frozen/$id.wav" || true
+          done
+          rm -f /tmp/independent-dialogue-private.zip /tmp/ingcrowd-frozen-metrics-only.json /tmp/ingcrowd-model-metrics-only.json
