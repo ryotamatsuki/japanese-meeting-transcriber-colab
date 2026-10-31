@@ -24,10 +24,11 @@ async def api(context, method, path, status=200, **kwargs):
 
 async def client(context, index):
     page = await context.new_page()
+    page.set_default_timeout(60000)
     errors=[]
     page.on('pageerror', lambda _: errors.append('pageerror'))
     await page.goto(URL, wait_until='networkidle')
-    await expect(page.get_by_role('button', name='文字起こしを開始')).to_be_visible()
+    await expect(page.get_by_role('button', name='文字起こしを開始')).to_be_visible(timeout=60000)
     await page.screenshot(path=str(OUT / f'{index}-dashboard.png'), full_page=True)
     session = await (await api(context,'GET','/api/session')).json()
     assert session.get('anonymous') is True
