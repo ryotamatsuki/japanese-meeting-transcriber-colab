@@ -1,0 +1,81 @@
+name: Research-only inspect NVIDIA head-to-head numeric evidence
+on:
+  pull_request:
+    branches: [research/qwen-time-diarization-sensitivity-20261031]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    if: github.event.pull_request.number == 12
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Poll one-shot and emit aggregate metrics only
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,os,subprocess,time,pathlib
+          repo=os.environ["GH_REPO"]
+          wanted="0995d182b6130442770c75ee26ef8f071c9184f5"
+          wf="once-nvidia-diarizer-20261031.yml"
+          selected=None
+          for attempt in range(40):
+              try:
+                  txt=subprocess.check_output(["gh","api","-X","GET",
+                      f"repos/{repo}/actions/workflows/{wf}/runs",
+                      "-f","per_page=30"],text=True,stderr=subprocess.PIPE)
+                  runs=json.loads(txt).get("workflow_runs",[])
+                  matched=[r for r in runs if r.get("head_sha")==wanted
+                           and r.get("event")=="push"]
+                  if matched:
+                      selected=max(matched,key=lambda r:r["id"])
+                      if selected.get("status")=="completed":break
+              except subprocess.CalledProcessError as exc:
+                  print("RUN_QUERY_FAILED",type(exc).__name__)
+              time.sleep(12)
+          print("NVIDIA_ONE_SHOT_STATUS",json.dumps({
+              "url":selected.get("html_url"),
+              "id":selected.get("id"),"status":selected.get("status"),
+              "conclusion":selected.get("conclusion")} if selected else {"found":False}))
+          if not selected or selected.get("status")!="completed":
+              print("NO_FINAL_EVIDENCE_YET");raise SystemExit(0)
+          jobs=json.loads(subprocess.check_output(["gh","api","-X","GET",
+              f"repos/{repo}/actions/runs/{selected['id']}/jobs"],text=True))
+          print("ONE_SHOT_STEP_STATUS",json.dumps([
+              {"step":s["name"],"conclusion":s.get("conclusion")}
+              for job in jobs.get("jobs",[]) for s in job.get("steps",[])
+              if s.get("conclusion")=="failure"
+              or "Destroy project" in s["name"] or "Freeze Qwen" in s["name"]
+              or "NeMo" in s["name"]]))
+          artifacts=json.loads(subprocess.check_output(["gh","api","-X","GET",
+              f"repos/{repo}/actions/runs/{selected['id']}/artifacts"],text=True))
+          xs=[a for a in artifacts.get("artifacts",[])
+              if a["name"]=="jcre3-nvidia-community-matched-metrics-only"]
+          if len(xs)!=1:
+              print("NO_NUMERIC_ARTIFACT");raise SystemExit(0)
+          path=pathlib.Path("/tmp/evidence")
+          path.mkdir()
+          subprocess.run(["gh","run","download",str(selected["id"]),"--name",
+              xs[0]["name"],"--dir",str(path)],check=True)
+          for f in path.glob("*.json"):
+              data=json.loads(f.read_text())
+              if "model_info" in data:
+                  print("MODEL_LOAD_NUMERIC",json.dumps(data["model_info"]))
+                  for r in data["records"]:
+                      print("MATCHED_RECORD_METRICS",json.dumps({
+                          "id":r["record_id"],"reference_chars":r["reference_chars"],
+                          "community":r["community"],
+                          "sortformer":r["nvidia/diar_streaming_sortformer_4spk-v2.1"],
+                          "nemotron3":r["nvidia/Nemotron-3-Diarization"]
+                      },ensure_ascii=False))
+                  print("NVIDIA_ALL_COMPLETE",data["all_completed"])
+              elif "records" in data:
+                  print("FROZEN_BASELINE_NUMERIC",json.dumps([
+                      {"id":r["record_id"],"cpcer":r.get("baseline_cpcer"),
+                       "DER":r.get("baseline_DER"),"status":r.get("status")}
+                      for r in data["records"]],ensure_ascii=False))
+          PY
