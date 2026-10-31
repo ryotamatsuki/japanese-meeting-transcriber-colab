@@ -1,0 +1,98 @@
+name: Modal anonymous Studio - isolated two-client live validation
+on:
+  push:
+    branches:
+      - feature/kiroku-anonymous-isolation-20261031
+    paths:
+      - .github/workflows/kiroku-anonymous-live.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kiroku-anonymous-live-deploy
+  cancel-in-progress: false
+jobs:
+  deploy_and_smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      KIROKU_BUDGET_VERIFIED: ${{ vars.KIROKU_BUDGET_VERIFIED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Compile and check anonymous smoke script
+        run: python -m py_compile scripts/smoke_anonymous_modal_live.py
+      - name: Preflight - block without Modal credentials and verified workspace budget
+        shell: bash
+        run: |
+          if [[ -z "${MODAL_TOKEN_ID:-}" || -z "${MODAL_TOKEN_SECRET:-}" ]]; then
+            echo "::error::BLOCKED: MODAL_TOKEN_ID and MODAL_TOKEN_SECRET must exist in GitHub Actions secrets."
+            exit 2
+          fi
+          if [[ "${KIROKU_BUDGET_VERIFIED:-}" != "yes" ]]; then
+            echo "::error::BLOCKED: Confirm real Modal Workspace Budget, Spend Limit and alerting, then set repository variable KIROKU_BUDGET_VERIFIED=yes."
+            exit 2
+          fi
+          echo "Modal credential references and independent budget approval are present."
+      - name: Install Modal and HTTP client
+        run: python -m pip install modal==1.4.3 httpx==0.28.1
+      - name: Build production React Studio
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Deploy anonymous app only (never modify passworded beta)
+        id: deploy
+        shell: bash
+        run: |
+          set -o pipefail
+          modal deploy beta_modal_anonymous.py 2>&1 | tee "$RUNNER_TEMP/kiroku-deploy.log"
+          touch "$RUNNER_TEMP/kiroku-deployed"
+          python - <<'PY'
+          import os,re,pathlib
+          raw=(pathlib.Path(os.environ['RUNNER_TEMP'])/'kiroku-deploy.log').read_text()
+          urls=re.findall(r'https://[A-Za-z0-9.-]+\.modal\.run',raw)
+          selected=[u for u in urls if 'anonymous' in u]
+          if not selected:
+              raise SystemExit('Missing deployed anonymous Modal HTTPS URL')
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as f:
+              print('url='+selected[-1],file=f)
+          print('Anonymous Modal endpoint deployment detected.')
+          PY
+      - name: Download permitted, public-domain Japanese speech test audio
+        shell: bash
+        run: |
+          mkdir -p local_audio
+          curl --fail --location --retry 3 --silent --show-error --max-time 60 \
+            'https://upload.wikimedia.org/wikipedia/commons/6/63/Ja-LessonIntroKonPron-practice1.ogg' \
+            --output local_audio/public_domain_japanese_speech.ogg
+          test "$(stat -c %s local_audio/public_domain_japanese_speech.ogg)" -gt 1000
+      - name: Concurrent isolated browser-session API + actual GPU + edited ZIP test
+        shell: bash
+        env:
+          KIROKU_TEST_URL: ${{ steps.deploy.outputs.url }}
+          KIROKU_TEST_AUDIO: local_audio/public_domain_japanese_speech.ogg
+        run: python scripts/smoke_anonymous_modal_live.py
+      - name: Stop anonymous app if validation failed after deployment
+        if: failure()
+        shell: bash
+        run: |
+          if [[ -f "$RUNNER_TEMP/kiroku-deployed" ]] && [[ -n "${MODAL_TOKEN_ID:-}" ]]; then
+            modal app stop --yes kiroku-anonymous-studio-beta || true
+          fi
+      - name: Publish non-sensitive endpoint verification summary
+        if: success()
+        shell: bash
+        env:
+          TEST_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          echo "Validated live Studio URL: $TEST_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Two independent HTTP clients; two real-audio A10 jobs; both ZIPs verified." >> "$GITHUB_STEP_SUMMARY"
+          echo "Physical PC/phone testing remains separate." >> "$GITHUB_STEP_SUMMARY"
