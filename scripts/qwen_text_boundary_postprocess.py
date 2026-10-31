@@ -102,6 +102,14 @@ def _merge_ok(a: dict, b: dict) -> bool:
     if b["text"].lstrip().startswith(("はい、", "はい。", "ええ、", "ええ。",
                                          "うん、", "うん。")):
         return False
+    # Text-only LLM trials repeatedly merged independent, finished clauses
+    # lacking punctuation ("...です" followed by a different topic).
+    # Require overt grammatical incompleteness; reject uncertain candidates.
+    fragment = a["text"].rstrip()
+    if not fragment.endswith(("、", "は", "を", "に", "で", "へ", "と", "が",
+                              "も", "の", "から", "まで", "について",
+                              "として", "に関して", "に対して")):
+        return False
     return True
 
 
