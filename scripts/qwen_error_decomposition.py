@@ -16,7 +16,7 @@ from pathlib import Path
 
 from scripts.evaluate_asr_cer import evaluate, normalized_ja
 from scripts.evaluate_attributed_transcript import permutation_cer
-from scripts.eval_elan_ja import load_elan
+from scripts.v1_meeting_reference import load_meeting_eaf
 from scripts.qwen_timing_bridge import qwen_segments
 from transcriber.alignment import assign_and_group
 
@@ -314,6 +314,7 @@ def mark_qwen_timing_origins(chunks, segments, duration):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--eaf", type=Path, required=True)
+    p.add_argument("--speaker-tiers", nargs="+", help="explicit 2-4 speaker ELAN tier IDs")
     p.add_argument("--qwen", type=Path, required=True,
                    help="private JSON with duration_seconds and chunks")
     p.add_argument("--exclusive", type=Path, required=True)
@@ -322,7 +323,8 @@ def main():
                    help="private JSON matching original lexical word units")
     p.add_argument("--output", type=Path, required=True)
     a = p.parse_args()
-    reference, reference_sha = load_elan(a.eaf)
+    reference, reference_sha, reference_meta = load_meeting_eaf(
+        a.eaf, speaker_tiers=a.speaker_tiers)
     raw = json.loads(a.qwen.read_text(encoding="utf-8"))
     segments, integrity = qwen_segments(raw["chunks"], raw["duration_seconds"],
         speech_end_seconds=raw.get("speech_end_seconds"))
@@ -331,6 +333,7 @@ def main():
     regular = _read_segments(a.regular) if a.regular else None
     result = compare_arms(reference, segments, exclusive, regular=regular, oracle=True)
     result["reference_sha256"] = reference_sha
+    result["reference_metadata"] = reference_meta
     result["alignment_integrity"] = integrity
     if a.timing_alternative:
         alt = json.loads(a.timing_alternative.read_text(encoding="utf-8"))
