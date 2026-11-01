@@ -62,6 +62,26 @@ class WordSpeakerTimingAuditTests(unittest.TestCase):
         self.assertNotIn("よろしく",keys)
         self.assertIn("lexical_sha256",keys)
 
+    def test_cumulative_same_speaker_overlap_reproduces_production(self):
+        from transcriber.alignment import assign_and_group
+        diar=[{"start":0.0,"end":1.0,"speaker_id":"A"},
+              {"start":1.0,"end":1.4,"speaker_id":"B"},
+              {"start":1.4,"end":1.8,"speaker_id":"A"}]
+        seg=[{"start":.8,"end":1.7,"text":"合算",
+              "words":[word(.8,1.7,"合算")]}]
+        raw=assign_and_group(seg,diar,True)[0]
+        assigned,_=_assign(_frozen_words(seg)[0],diar,"legacy")
+        self.assertEqual(raw[0]["speaker"],assigned[0]["speaker"])
+        self.assertEqual(assigned[0]["speaker"],"話者1")
+
+    def test_zero_duration_word_is_preserved_through_timing_evaluation(self):
+        data=copy.deepcopy(self.asr)
+        data[0]["words"][0]["end"]=data[0]["words"][0]["start"]
+        # The legacy production assigner allows a point-timestamp token
+        # and does not delete its lexical content.
+        result=evaluate(self.ref,data,self.diar,duration=4.)
+        self.assertEqual(result["word_count"],4)
+
     def test_missing_region_marks_unknown_instead_of_inventing_long_distance(self):
         w=[word(10,11,"離れた")]
         _,d=_assign(w,self.diar,"vote_no_fallback")
