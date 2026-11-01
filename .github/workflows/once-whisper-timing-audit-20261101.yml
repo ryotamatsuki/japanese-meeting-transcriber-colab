@@ -67,7 +67,7 @@ jobs:
           set -euo pipefail
           timeout 900s modal run -n kiroku-whisper-timing-preflight-20261101 modal_whisper_word_timing_audit.py::startup_check
           echo 'ISOLATED_A10_STARTUP_PREFLIGHT=PASS'
-      # Re-run after fixing stable chronological word ordering and safe stage diagnostics.
+      # Re-run after fixing cumulative-speaker vote parity and zero-duration token barriers.
       - name: Actual A10 frozen Whisper Community-1 speaker-timing evaluation
         shell: bash
         run: |
