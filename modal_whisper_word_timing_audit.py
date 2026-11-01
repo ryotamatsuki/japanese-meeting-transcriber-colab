@@ -7,8 +7,20 @@ Never deploy the model service or expose an endpoint. No user jobs accessed.
 from pathlib import Path
 import modal
 
-from beta_modal_anonymous import gpu_image
-image=gpu_image.add_local_python_source('scripts')
+# Keep the audit image self-contained. Importing beta_modal_anonymous at GPU
+# startup couples this one-shot task to another Modal app and its source files.
+# Reuse its pinned CUDA/torch/pyannote requirements and ldconfig setup, but
+# mount only the modules the audit function imports.
+image=(modal.Image.debian_slim(python_version='3.11')
+    .apt_install('ffmpeg','libsndfile1')
+    .pip_install_from_requirements('requirements-modal.lock',extra_index_url='https://download.pytorch.org/whl/cu128')
+    .run_commands(
+        "python -c \"import pathlib,site; p=pathlib.Path(site.getsitepackages()[0])/'nvidia'; "
+        "pathlib.Path('/etc/ld.so.conf.d/99-transcriber.conf').write_text('\\n'.join(str(d) for d in p.glob('*/lib')))\"",
+        'ldconfig','python -m pip check')
+    .env({'HF_HOME':'/models/hf','HF_HUB_CACHE':'/models/hf/hub',
+          'HF_HUB_DISABLE_TELEMETRY':'1','PYANNOTE_METRICS_ENABLED':'0'})
+    .add_local_python_source('scripts','transcriber'))
 APP_NAME="kiroku-whisper-timing-audit-20261101"
 VOLUME_NAME="kiroku-whisper-timing-audit-inputs-20261101"
 app=modal.App(APP_NAME)
