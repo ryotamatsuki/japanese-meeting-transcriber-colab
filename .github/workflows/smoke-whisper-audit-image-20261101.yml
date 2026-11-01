@@ -1,0 +1,41 @@
+name: One shot - repaired Whisper A10 image startup smoke
+on:
+  push:
+    branches:
+      - fix/whisper-modal-container-startup-20261101
+    paths:
+      - .github/workflows/smoke-whisper-audit-image-20261101.yml
+permissions:
+  contents: read
+concurrency:
+  group: kiroku-whisper-repaired-image-smoke
+  cancel-in-progress: false
+jobs:
+  startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      KIROKU_BUDGET_VERIFIED: ${{ vars.KIROKU_BUDGET_VERIFIED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Preconditions (budget, scope, exact source)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${KIROKU_BUDGET_VERIFIED:-}" = "yes"
+          test -n "${MODAL_TOKEN_ID:-}" && test -n "${MODAL_TOKEN_SECRET:-}"
+          python -m compileall -q modal_whisper_word_timing_audit.py scripts transcriber
+          ! grep -q "from beta_modal_anonymous import" modal_whisper_word_timing_audit.py
+      - name: Install Modal pinned client only
+        run: python -m pip install modal==1.4.3
+      - name: Real isolated A10 startup and import smoke (no transcript processing)
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 1200s modal run -n kiroku-whisper-timing-startup-smoke-20261101 modal_whisper_word_timing_audit.py::startup_check
+          echo 'LIVE_GPU_IMPORT_AND_VOLUME_SMOKE=PASS'
