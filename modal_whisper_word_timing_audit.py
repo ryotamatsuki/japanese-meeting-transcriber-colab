@@ -102,6 +102,38 @@ def run_audit():
             "rows":rows,"release":"NO-GO until independent real meetings and manual word alignment"}
 
 
+# Run this inexpensive readiness probe before repeating the full 3-record A10
+# evaluation. It cannot access source transcript contents and makes no writes.
+@app.function(image=image,gpu="A10",cpu=2,memory=12288,timeout=180,
+              max_containers=1,scaledown_window=2,retries=0,
+              single_use_containers=True,
+              volumes={"/inputs":inputs,"/models":weights},
+              secrets=[modal.Secret.from_name("transcriber-hf",required_keys=["HF_TOKEN"])])
+def startup_probe():
+    import os
+    import torch
+    from transcriber.processor import Config
+    from faster_whisper import WhisperModel
+    from pyannote.audio import Pipeline
+    from scripts.jcre3_reference import load_reference
+    from scripts.whisper_speaker_timing_audit import evaluate
+    return {
+        "cuda_available":bool(torch.cuda.is_available()),
+        "research_archive_mounted":Path("/inputs/eval.zip").is_file(),
+        "model_volume_mounted":Path("/models").is_dir(),
+        "hf_secret_present":bool(os.environ.get("HF_TOKEN")),
+        "research_imports_ok":all((Config,WhisperModel,Pipeline,load_reference,evaluate)),
+    }
+
+
+@app.local_entrypoint()
+def startup_check():
+    result=startup_probe.remote()
+    if not all(result.values()):
+        raise RuntimeError("Research GPU startup failed a resource/import check")
+    print("WHISPER_AUDIT_GPU_STARTUP_CHECK=PASS")
+
+
 @app.local_entrypoint()
 def main(output:str):
     import json
