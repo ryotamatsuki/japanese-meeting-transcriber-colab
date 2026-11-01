@@ -1,3 +1,4 @@
+# Rerun after restoring the beta.core transitive dependency confirmed by A10 traceback.
 name: One shot - repaired Whisper A10 image startup smoke
 on:
   push:
