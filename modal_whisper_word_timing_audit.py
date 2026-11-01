@@ -80,8 +80,12 @@ def run_audit():
                     diar_seconds=time.perf_counter()-start
                     # J-CRe3 preview audio duration is provided by Whisper decoding.
                     duration=float(asr_metrics["audio_seconds"])
+                    regular_path=root/"pyannote_通常話者区間.json"
+                    if not regular_path.is_file():
+                        raise ValueError("Community-1 Regular regions required for safe repair")
+                    regular=json.loads(regular_path.read_text(encoding="utf-8"))["segments"]
                     result=evaluate(ref,job["asr_segments"],job["diar_segments"],
-                                    duration=duration)
+                                    duration=duration,regular=regular)
                     # Audit text must never enter GitHub metadata or stdout.
                     row.update({"status":"success",
                                 "audio_seconds":round(duration,3),
