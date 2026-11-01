@@ -67,8 +67,12 @@ def transcribe_job(job_id: str, extension: str, diarization: bool, speakers: int
         audio=Path('/data/jobs')/job_id/('source'+extension)
         if not audio.is_file() or audio.stat().st_size!=job['expected_size']:
             raise ValueError('Source audio missing or inconsistent')
+        # Trial is strictly opt-in per job. The same Whisper large-v3 and
+        # Community-1 models are used; only post-attribution A-B-A handling differs.
+        trial=job.get('speaker_stability') is True and diarization is True
         config=Config(enable_diarization=diarization,expected_speakers=speakers,
-                      language='ja',quality_experiment=False,overlap_review=diarization,asr_beam_size=5)
+                      language='ja',quality_experiment=trial,overlap_review=diarization,
+                      word_stability_ms=450 if trial else 0,asr_beam_size=5)
         # The input is read from shared storage, not passed as an oversized RPC argument.
         with tempfile.TemporaryDirectory(prefix='transcriber-beta-') as tmp:
             archive,metrics=process(audio,Path(tmp)/'results','/models/whisper',config,

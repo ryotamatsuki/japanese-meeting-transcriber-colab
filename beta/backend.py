@@ -70,13 +70,17 @@ class FileBackend:
                 continue
         return sorted(valid,key=lambda j:j['created'],reverse=True)
 
-    def new_job(self, name, size, diarization=True, speakers=0, *, owner=None):
+    def new_job(self, name, size, diarization=True, speakers=0, *, owner=None, speaker_stability=False):
         self._check_owner(owner)
         suffix=validated_extension(name)
         if not isinstance(size,int) or type(size) is not int or not 0<size<=MAX_AUDIO_BYTES:
             raise StoreError('File must be 1 byte to 180 MiB')
         if type(diarization) is not bool or type(speakers) is not int or speakers not in (0,2,3,4):
             raise StoreError('Speaker setting must be auto, 2, 3, or 4')
+        if type(speaker_stability) is not bool:
+            raise StoreError('Speaker stability trial must be true or false')
+        if speaker_stability and not diarization:
+            raise StoreError('Speaker stability trial requires diarization')
         current=self.list_jobs(owner=owner)
         if self.require_owner:
             # Cap untrusted anonymous uploads *globally*, not just per cookie.
@@ -101,7 +105,8 @@ class FileBackend:
         self.commit()
         job={'id':id,'filename':Path(name).name[:120],'extension':suffix,
              'expected_size':size,'received':0,'status':'uploading','duration':None,
-             'diarization':diarization,'speakers':speakers,'created':time.time()}
+             'diarization':diarization,'speakers':speakers,
+              'speaker_stability':speaker_stability,'created':time.time()}
         if self.require_owner:
             job['owner']=owner
         self.state['job:'+id]=job

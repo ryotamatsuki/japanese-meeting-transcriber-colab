@@ -146,3 +146,12 @@
 .paragraph-edit:hover{background:#f5f4ff}
 .studio-subtoolbar{flex-wrap:wrap;row-gap:9px}
 @media(max-width:650px){.speaker-paragraph{padding:15px 12px}.paragraph-edit{margin-left:0}}
+
+/* Optional user-visible speaker-stability experiment, off by default. */
+.trial-opt-in{display:flex;align-items:center;gap:10px;padding:8px 11px;border:1px solid #e2e4f0;border-radius:10px;background:#fafaff;cursor:pointer;min-width:0;max-width:275px}
+.trial-opt-in input{accent-color:#6b5bd9;width:17px;height:17px;flex:none}
+.trial-opt-in span{display:flex;flex-direction:column;gap:3px;line-height:1.4}
+.trial-opt-in strong{font-size:12px;font-weight:700;color:#4d4d78}
+.trial-opt-in small{font-size:10px;color:#8d899d}
+.trial-record-label{font-size:10px;color:#7461b6;font-weight:650}
+@media(max-width:750px){.trial-opt-in{order:2;max-width:none;flex:1 1 100%}}

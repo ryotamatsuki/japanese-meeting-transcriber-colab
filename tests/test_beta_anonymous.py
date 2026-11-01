@@ -45,6 +45,32 @@ class AnonymousIsolationTests(unittest.TestCase):
         self.assertNotIn("owner", response.json())
         return response.json()["id"]
 
+    def test_opt_in_speaker_stability_is_off_by_default_and_owner_scoped(self):
+        ordinary = self._create(self.a,self.ca,'ordinary.wav')
+        self.assertIs(self.state['job:'+ordinary]['speaker_stability'],False)
+        self.assertNotIn(ordinary,repr(self.b.get('/api/jobs').json()))
+        self.assertEqual(self.a.delete('/api/jobs/'+ordinary,headers={'X-CSRF':self.ca}).status_code,200)
+        experimental=self.a.post('/api/jobs',headers={'X-CSRF':self.ca},
+            json={'filename':'experimental.wav','size':6,'speakers':2,'diarization':True,
+                  'speaker_stability':True})
+        self.assertEqual(experimental.status_code,200,experimental.text)
+        job=experimental.json()
+        self.assertIs(job['speaker_stability'],True)
+        self.assertIs(self.state['job:'+job['id']]['speaker_stability'],True)
+        self.assertEqual(self.b.get('/api/jobs/'+job['id']).status_code,404)
+        self.assertEqual(self.a.get('/api/jobs/'+job['id']).json()['speaker_stability'],True)
+
+    def test_invalid_or_unsupported_speaker_stability_flags_are_rejected(self):
+        for value in ('true',1,None,[],{}):
+            response=self.a.post('/api/jobs',headers={'X-CSRF':self.ca},
+                json={'filename':'invalid.wav','size':6,'speaker_stability':value})
+            self.assertEqual(response.status_code,400,(value,response.text))
+        no_diar=self.a.post('/api/jobs',headers={'X-CSRF':self.ca},
+            json={'filename':'no-diar.wav','size':6,
+                  'diarization':False,'speaker_stability':True})
+        self.assertEqual(no_diar.status_code,400)
+        self.assertEqual(self.a.get('/api/jobs').json()['jobs'],[])
+
     def test_session_issued_without_login_and_owner_not_in_metadata(self):
         self.assertTrue(self.a.get("/api/session").json()["anonymous"])
         self.assertNotEqual(self.a.cookies["beta_session"], self.b.cookies["beta_session"])
