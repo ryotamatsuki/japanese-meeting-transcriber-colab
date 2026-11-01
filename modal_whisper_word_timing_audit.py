@@ -10,7 +10,7 @@ import modal
 # Keep the audit image self-contained. Importing beta_modal_anonymous at GPU
 # startup couples this one-shot task to another Modal app and its source files.
 # Reuse its pinned CUDA/torch/pyannote requirements and ldconfig setup, but
-# mount only the modules the audit function imports.
+# mount only the explicitly required packages, including beta.core used by evaluation.
 image=(modal.Image.debian_slim(python_version='3.11')
     .apt_install('ffmpeg','libsndfile1')
     .pip_install_from_requirements('requirements-modal.lock',extra_index_url='https://download.pytorch.org/whl/cu128')
@@ -20,7 +20,7 @@ image=(modal.Image.debian_slim(python_version='3.11')
         'ldconfig','python -m pip check')
     .env({'HF_HOME':'/models/hf','HF_HUB_CACHE':'/models/hf/hub',
           'HF_HUB_DISABLE_TELEMETRY':'1','PYANNOTE_METRICS_ENABLED':'0'})
-    .add_local_python_source('scripts','transcriber'))
+    .add_local_python_source('beta','transcriber','scripts'))
 APP_NAME="kiroku-whisper-timing-audit-20261101"
 VOLUME_NAME="kiroku-whisper-timing-audit-inputs-20261101"
 app=modal.App(APP_NAME)
