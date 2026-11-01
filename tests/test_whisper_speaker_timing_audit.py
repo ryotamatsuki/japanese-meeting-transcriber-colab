@@ -39,11 +39,15 @@ class WordSpeakerTimingAuditTests(unittest.TestCase):
         midpoint,_=_assign(words,intervals,"midpoint")
         self.assertNotEqual(onset[0]["speaker"],midpoint[0]["speaker"])
 
-    def test_lexical_inversion_refused_without_hidden_reordering(self):
-        bad=[{"start":2.0,"end":2.2,"words":[word(2,2.2,"遅")]},
-             {"start":1.0,"end":1.2,"words":[word(1,1.2,"早")]}]
-        with self.assertRaises(ValueError):
-            _frozen_words(bad)
+    def test_lexical_inversion_frozen_in_exact_legacy_timeline_order(self):
+        source=[{"start":2.0,"end":2.2,"words":[word(2,2.2,"遅")]},
+                {"start":1.0,"end":1.2,"words":[word(1,1.2,"早")]}]
+        original=copy.deepcopy(source)
+        ordered,frozen,moves=_frozen_words(source)
+        self.assertEqual([w["text"] for w in ordered],["早","遅"])
+        self.assertEqual(frozen,"早遅")
+        self.assertEqual(moves,2)
+        self.assertEqual(source,original)
 
     def test_overlapping_input_for_exclusive_is_rejected(self):
         data=copy.deepcopy(self.diar)
