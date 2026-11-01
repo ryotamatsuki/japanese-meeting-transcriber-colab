@@ -64,6 +64,15 @@ class GuardedBoundaryAttributionTests(unittest.TestCase):
         out,a=guarded_boundary_repair(words,self.exclusive,regular=self.regular)
         self.assertEqual(out[1]["speaker"],"話者2")
 
+    def test_zero_duration_word_kept_without_any_speaker_relabel(self):
+        words=copy.deepcopy(self.words)
+        words[1]["end"]=words[1]["start"]
+        output,audit=guarded_boundary_repair(
+            words,self.exclusive,regular=self.regular)
+        self.assertEqual(output,words)
+        self.assertEqual(audit["zero_duration_words"],1)
+        self.assertIn("zero_duration_word",audit["rejected"])
+
     def test_empty_regular_diarization_never_changes_labels(self):
         out,audit=guarded_boundary_repair(
             self.words,self.exclusive,regular=[])
