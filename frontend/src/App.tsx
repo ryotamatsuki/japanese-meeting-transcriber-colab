@@ -13,7 +13,7 @@ import type { TranscriptCopyMode } from './transcriptCopy'
 type JobStatus = 'uploading' | 'queued' | 'running' | 'complete' | 'failed' | 'deleted'
 type Job = { id: string; filename: string; status: JobStatus; received: number;
   expected_size: number; duration: number | null; speakers: number; created: number;
-  utterances?: number; error?: string }
+  utterances?: number; error?: string; speaker_stability?: boolean }
 type Row = { start: number; end: number; speaker: string; text: string }
 type ReviewWindow = { id: string; start: number; end: number }
 type Review = { available: boolean; total_candidates: number; windows: ReviewWindow[]; reviewed_ids: string[] }
@@ -71,6 +71,7 @@ export default function App() {
   const [saving, setSaving] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [speakerCount, setSpeakerCount] = useState(0)
+  const [speakerStability, setSpeakerStability] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -248,7 +249,7 @@ export default function App() {
     setNotice(null);setUploading(true);setUploadProgress(0)
     try {
       const job = await api<Job>('/api/jobs', {method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({filename:file.name,size:file.size,diarization:true,speakers:speakerCount})})
+        body: JSON.stringify({filename:file.name,size:file.size,diarization:true,speakers:speakerCount,speaker_stability:speakerStability})})
       for (let offset=0;offset<file.size;offset+=CHUNK) {
         await api<Job>('/api/jobs/'+job.id+'/chunks?offset='+offset,{method:'PUT',headers:{'Content-Type':'application/octet-stream'},
           body:file.slice(offset,Math.min(offset+CHUNK,file.size))})
@@ -491,6 +492,11 @@ export default function App() {
             <div className="upload-footer"><div className="speaker-setting"><label htmlFor="speakers">話者数</label><div><Mic2 size={18}/><select id="speakers" value={speakerCount} disabled={uploading} onChange={e=>setSpeakerCount(Number(e.target.value))}>
               <option value={0}>自動推定</option><option value={2}>2人</option><option value={3}>3人</option><option value={4}>4人</option>
             </select><ChevronDown size={16}/></div></div>
+              <label className="trial-opt-in">
+                <input type="checkbox" checked={speakerStability} disabled={uploading||PREVIEW_ONLY}
+                  onChange={event=>setSpeakerStability(event.target.checked)} aria-label="短い話者切替の補正を試す"/>
+                <span><strong>話者分離の改善を試す</strong><small>試験機能・未検証のため誤結合の可能性あり</small></span>
+              </label>
               <span className="diar-setting"><Check size={16}/> {PREVIEW_ONLY?'デザインプレビュー（AI処理は無効）':'話者分離・重複発話検出を有効化'}</span>
               <button className="primary-button upload-submit" disabled={PREVIEW_ONLY||!file||uploading} onClick={()=>void upload()}>{uploading?<LoaderCircle size={19} className="spin"/>:<WandSparkles size={19}/>} {uploading?'転送中':'文字起こしを開始'} <ArrowRight size={17}/></button></div>
             {uploading&&<div className="upload-progress"><div><span style={{width:uploadProgress+'%'}}/></div><p>アップロード中… {uploadProgress}%</p></div>}
@@ -499,7 +505,8 @@ export default function App() {
             <button className="refresh-button" onClick={()=>void refresh()}><RotateCw size={16}/> 更新</button></div>
             {jobs.length===0?<div className="empty-records"><FileAudio2 size={28}/><strong>まだファイルがありません</strong><p>最初の音声をアップロードしてください。</p></div>:
               <div className="record-list">{jobs.map(j=><div className="record" key={j.id}><div className="record-icon"><FileAudio2 size={22}/></div>
-                <div className="record-name"><strong title={j.filename}>{j.filename}</strong><small>{new Date(j.created*1000).toLocaleString('ja-JP')} · {j.duration?hhmmss(j.duration):mb(j.received||0)}</small></div>
+                <div className="record-name"><strong title={j.filename}>{j.filename}</strong>
+                  {j.speaker_stability===true&&<span className="trial-record-label">話者補正の試験モード</span>}<small>{new Date(j.created*1000).toLocaleString('ja-JP')} · {j.duration?hhmmss(j.duration):mb(j.received||0)}</small></div>
                 <span className={'status status-'+(statuses[j.status]?.style||'neutral')}><i/>{statuses[j.status]?.label||j.status}</span>
                 <div className="record-actions">{j.status==='complete'&&<button className="outlined-button" disabled={actionId!==null} onClick={()=>void openJob(j)}>編集する <ArrowRight size={16}/></button>}
                   {['uploading','complete','failed'].includes(j.status)&&<TinyButton icon={<Trash2 size={17}/>} title="録音と結果を削除" disabled={actionId!==null} onClick={()=>void remove(j)}/>}</div>
