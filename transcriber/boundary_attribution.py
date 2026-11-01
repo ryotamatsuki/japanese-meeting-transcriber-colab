@@ -61,11 +61,16 @@ def guarded_boundary_repair(words, exclusive, *, regular=None,
         if not (0<=float(r["start"])<float(r["end"])
                 and math.isfinite(float(r["start"])) and math.isfinite(float(r["end"]))):
             raise ValueError("Invalid Regular region")
+    zero_duration_words=set()
     for i,w in enumerate(ordered):
         a,b=float(w["start"]),float(w["end"])
-        if not (math.isfinite(a) and math.isfinite(b) and 0<=a<b
+        if not (math.isfinite(a) and math.isfinite(b) and 0<=a<=b
                 and (i==0 or a>=float(ordered[i-1]["start"]))):
             raise ValueError("Invalid or unordered word timestamp")
+        if a==b:
+            # Legitimate Whisper alignment placeholder: never infer speaker
+            # from a zero-length interval; use it as an immutable barrier.
+            zero_duration_words.add(i)
     speaker_ids={}
     for r in region:
         raw=str(r["speaker_id"])
@@ -137,7 +142,9 @@ def guarded_boundary_repair(words, exclusive, *, regular=None,
              and ordered[i-1]["speaker"] in label_to_raw):
             a,b=float(ordered[i]["start"]),max(float(x["end"]) for x in ordered[i:j+1])
             target=ordered[i-1]["speaker"]
-            if duration(i,j)>max_island_seconds:
+            if any(k in zero_duration_words for k in range(i-1,j+2)):
+                reject("zero_duration_word")
+            elif duration(i,j)>max_island_seconds:
                 reject("island_too_long")
             elif any(str(x["text"]).strip() in BACKCHANNELS for x in ordered[i:j+1]) or (
                 re.sub(r"[。、.,!?！？\s]","","".join(x["text"] for x in ordered[i:j+1])) in BACKCHANNELS):
@@ -174,6 +181,7 @@ def guarded_boundary_repair(words, exclusive, *, regular=None,
         raise AssertionError("Speaker repair must not touch word text/timestamps")
     return output,{
         "examined_words":len(words),"island_candidates":len(proposals),
+        "zero_duration_words":len(zero_duration_words),
         "relabeled_words":sum(j-i+1 for i,j,_ in proposals),
         "rejected":dict(sorted(rejections.items())),
         "annotation":"overlap votes are not calibrated speaker probabilities",
