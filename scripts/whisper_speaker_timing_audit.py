@@ -13,7 +13,41 @@ from collections import Counter
 
 from scripts.evaluate_asr_cer import normalized_ja
 from scripts.evaluate_attributed_transcript import permutation_cer
-from scripts.qwen_error_decomposition import extract_words, group_words
+# Keep the production Whisper evaluation independent of Qwen-only research modules.
+def extract_words(asr_segments):
+    words=[]
+    for seg in asr_segments:
+        parts=seg.get("words") or ([seg] if str(seg.get("text","")).strip() else [])
+        for part in parts:
+            t=str(part.get("text",""))
+            if not t.strip():
+                continue
+            words.append({"start":float(part["start"]),"end":float(part["end"]),"text":t})
+    if not words:
+        raise ValueError("No ASR words available")
+    return words
+
+
+def group_words(words,max_chars=110,max_seconds=22,max_pause=1.5):
+    rows=[]
+    current=None
+    for w in words:
+        a,b=w["start"],w["end"]
+        if (current and (current["speaker"]!=w["speaker"]
+             or a-current["end"]>max_pause
+             or b-current["start"]>max_seconds
+             or len(current["text"])+len(w["text"])>max_chars)):
+            rows.append(current)
+            current=None
+        if current is None:
+            current={"start":a,"end":b,"speaker":w["speaker"],"text":w["text"]}
+        else:
+            current["end"]=max(current["end"],b)
+            current["text"]+=w["text"]
+    if current:
+        rows.append(current)
+    return rows
+
 from transcriber.alignment import assign_and_group
 
 OFFSETS = (-0.30, -0.15, 0., 0.15, 0.30)
