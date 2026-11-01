@@ -64,6 +64,13 @@ class GuardedBoundaryAttributionTests(unittest.TestCase):
         out,a=guarded_boundary_repair(words,self.exclusive,regular=self.regular)
         self.assertEqual(out[1]["speaker"],"話者2")
 
+    def test_empty_regular_diarization_never_changes_labels(self):
+        out,audit=guarded_boundary_repair(
+            self.words,self.exclusive,regular=[])
+        self.assertEqual(out,self.words)
+        self.assertEqual(audit["relabeled_words"],0)
+        self.assertIn("regular_diarization_missing",audit["rejected"])
+
     def test_invalid_regions_and_word_order_rejected(self):
         with self.assertRaises(ValueError):
             guarded_boundary_repair(self.words,[s(0,1.1,"rawA"),s(1.0,2.2,"rawB")],
