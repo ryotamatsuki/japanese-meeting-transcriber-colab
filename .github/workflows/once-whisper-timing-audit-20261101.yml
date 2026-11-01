@@ -57,7 +57,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          modal volume create kiroku-whisper-timing-audit-inputs-20261101 || modal volume ls
+          modal volume create kiroku-whisper-timing-audit-inputs-20261101 || modal volume ls kiroku-whisper-timing-audit-inputs-20261101
           modal volume put kiroku-whisper-timing-audit-inputs-20261101 "$PRIVATE" /eval.zip
           rm -f "$PRIVATE"
           echo 'PRIVATE_INPUT_TRANSFER=PASS'
