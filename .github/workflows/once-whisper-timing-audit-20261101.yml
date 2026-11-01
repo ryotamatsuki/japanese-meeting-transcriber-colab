@@ -4,7 +4,7 @@ name: One shot - frozen Whisper Community word timing actual A10
 on:
   push:
     branches:
-      - research/whisper-word-speaker-timing-audit-20261101
+      - research/word-timing-boundary-aware-ablation-20261101
     paths:
       - .github/workflows/once-whisper-timing-audit-20261101.yml
 permissions:
@@ -81,6 +81,9 @@ jobs:
           assert all(r['claims']['whisper_words_frozen'] and
                      r['claims']['community_regions_frozen'] and
                      r['status']=='success' for r in j['rows'])
+          assert all('guarded_boundary' in r['rules'] and
+                     r['rules']['guarded_boundary']['relabeled_words']>=0
+                     for r in j['rows'])
           assert all(r['rules']['legacy']['edits']==r['shift_sensitivity_diagnostic_only']['0.0']['edits']
                      for r in j['rows'])
           print('ACTUAL_A10_3_OF_3_RESEARCH_SAMPLES_COMPLETE=PASS')
@@ -93,7 +96,7 @@ jobs:
           from pathlib import Path
           import os,json
           j=json.loads(Path(os.environ['METRICS']).read_text())
-          rules=['legacy','midpoint','onset','end','vote_no_fallback']
+          rules=['legacy','midpoint','onset','end','vote_no_fallback','guarded_boundary']
           counts=sum(r['reference_characters'] for r in j['rows'])
           table={rule:{
             'total_edits':sum(r['rules'][rule]['edits'] for r in j['rows']),
