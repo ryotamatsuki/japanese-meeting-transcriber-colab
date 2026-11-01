@@ -20,8 +20,8 @@ jobs:
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
       KIROKU_BUDGET_VERIFIED: ${{ vars.KIROKU_BUDGET_VERIFIED }}
       DATASET: docs/jcre3_unseen_manifest_20261031.json
-      PRIVATE: ${{ runner.temp }}/kiroku-audio-eval.zip
-      METRICS: ${{ runner.temp }}/whisper_timing_metrics.json
+      PRIVATE: /tmp/kiroku-audio-eval.zip
+      METRICS: /tmp/whisper_timing_metrics.json
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
