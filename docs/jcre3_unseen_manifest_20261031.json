@@ -1,0 +1,36 @@
+{
+  "dataset": "riken-grp/J-CRe3",
+  "license": "CC BY-SA 4.0",
+  "revision": "61814236abf16258c7fb9778e32e660c1602ecfa",
+  "source": "https://github.com/riken-grp/J-CRe3",
+  "scope": "two-person acted household task dialogue, not an administrative meeting",
+  "audio_representation": "Box-generated preview MP3; original WAV download not successfully transferred",
+  "selection": "official test split; lexicographically first test ID for each of first three dates; chosen before inference",
+  "model_training_exposure": "unknown; unseen by this project does not imply absent from model training",
+  "records": [
+    {
+      "id": "20220302-56130322-0",
+      "audio_sha256": "f77a1ce6ae752db0977cf891c69408cdbfee56a293146f3d46b0f2a31707fcbd",
+      "reference_sha256": "be192142f857609d870dd50d8ca361efc8ff3824db00140bd89223267a30daa2",
+      "reference_path": "transcriptions/20220302-56130322-0/20220302-56130322-0-hh-20220405.txt",
+      "box_file_url": "https://riken-share.ent.box.com/s/25vjhsccliimse0q74z35nv8j5bz31is/file/1485152795713",
+      "reference_turns": 14
+    },
+    {
+      "id": "20220303-56130205-1",
+      "audio_sha256": "daad08e15393d3e118a7d06e3795b85b80ace4d7d32339af8d983204e41453a1",
+      "reference_sha256": "1433e9b6aebd280cdf9104fb9a12d6ba48f3ec9c4f869f37923319322153875a",
+      "reference_path": "transcriptions/20220303-56130205-1/20220303-56130205-1-hh-20220404.txt",
+      "box_file_url": "https://riken-share.ent.box.com/s/25vjhsccliimse0q74z35nv8j5bz31is/file/1485156890054",
+      "reference_turns": 23
+    },
+    {
+      "id": "20220304-56132112-1",
+      "audio_sha256": "f6b196ff54881daee4df022d9eb96bb143212d98a3fa306c5cdeaeb5fdd398da",
+      "reference_sha256": "712d0ac21ac46d6aa68a9385f2d5c669eab28c1175d24a190f6df92b0320088b",
+      "reference_path": "transcriptions/20220304-56132112-1/20220304-56132112-1-hh-20220405.txt",
+      "box_file_url": "https://riken-share.ent.box.com/s/25vjhsccliimse0q74z35nv8j5bz31is/file/1485169439465",
+      "reference_turns": 22
+    }
+  ]
+}
