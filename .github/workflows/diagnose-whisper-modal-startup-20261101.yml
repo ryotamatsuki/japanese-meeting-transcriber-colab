@@ -41,6 +41,9 @@ jobs:
             'container_crash':r"(crash.loop|Runner failed with exception)",
           }
           print('RAW_LOG_BYTES=',len(messages.encode()))
+          for line in messages.splitlines():
+            if any(k in line for k in ('Usage:', 'Error:', 'No such', 'not found', 'deprecated', 'warning:', 'Usage:')):
+              print('SANITIZED_CLI_LINE', re.sub(r'(?i)(token|secret|password|key)\\s*[=:]\\s*\\S+',r'\\1=[REDACTED]',line)[:240])
           for name,pat in patterns.items():
             matches=re.findall(pat,messages,re.IGNORECASE)
             print('CLASS',name,'COUNT',len(matches),'SAFE_DETAILS',sorted(set(matches))[:5])
