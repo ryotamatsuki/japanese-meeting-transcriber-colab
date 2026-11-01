@@ -71,7 +71,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          timeout 2400s modal run modal_whisper_word_timing_audit.py --output "$METRICS"
+          timeout 2400s modal run modal_whisper_word_timing_audit.py::main --output "$METRICS"
           python - <<'PY'
           import json,os
           from pathlib import Path
