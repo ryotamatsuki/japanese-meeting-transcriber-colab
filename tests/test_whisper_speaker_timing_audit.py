@@ -39,11 +39,15 @@ class WordSpeakerTimingAuditTests(unittest.TestCase):
         midpoint,_=_assign(words,intervals,"midpoint")
         self.assertNotEqual(onset[0]["speaker"],midpoint[0]["speaker"])
 
-    def test_lexical_inversion_refused_without_hidden_reordering(self):
-        bad=[{"start":2.0,"end":2.2,"words":[word(2,2.2,"遅")]},
-             {"start":1.0,"end":1.2,"words":[word(1,1.2,"早")]}]
-        with self.assertRaises(ValueError):
-            _frozen_words(bad)
+    def test_lexical_inversion_frozen_in_exact_legacy_timeline_order(self):
+        source=[{"start":2.0,"end":2.2,"words":[word(2,2.2,"遅")]},
+                {"start":1.0,"end":1.2,"words":[word(1,1.2,"早")]}]
+        original=copy.deepcopy(source)
+        ordered,frozen,moves=_frozen_words(source)
+        self.assertEqual([w["text"] for w in ordered],["早","遅"])
+        self.assertEqual(frozen,"早遅")
+        self.assertEqual(moves,2)
+        self.assertEqual(source,original)
 
     def test_overlapping_input_for_exclusive_is_rejected(self):
         data=copy.deepcopy(self.diar)
@@ -57,6 +61,26 @@ class WordSpeakerTimingAuditTests(unittest.TestCase):
         self.assertNotIn("こんにちは",keys)
         self.assertNotIn("よろしく",keys)
         self.assertIn("lexical_sha256",keys)
+
+    def test_cumulative_same_speaker_overlap_reproduces_production(self):
+        from transcriber.alignment import assign_and_group
+        diar=[{"start":0.0,"end":1.0,"speaker_id":"A"},
+              {"start":1.0,"end":1.4,"speaker_id":"B"},
+              {"start":1.4,"end":1.8,"speaker_id":"A"}]
+        seg=[{"start":.8,"end":1.7,"text":"合算",
+              "words":[word(.8,1.7,"合算")]}]
+        raw=assign_and_group(seg,diar,True)[0]
+        assigned,_=_assign(_frozen_words(seg)[0],diar,"legacy")
+        self.assertEqual(raw[0]["speaker"],assigned[0]["speaker"])
+        self.assertEqual(assigned[0]["speaker"],"話者1")
+
+    def test_zero_duration_word_is_preserved_through_timing_evaluation(self):
+        data=copy.deepcopy(self.asr)
+        data[0]["words"][0]["end"]=data[0]["words"][0]["start"]
+        # The legacy production assigner allows a point-timestamp token
+        # and does not delete its lexical content.
+        result=evaluate(self.ref,data,self.diar,duration=4.)
+        self.assertEqual(result["word_count"],4)
 
     def test_missing_region_marks_unknown_instead_of_inventing_long_distance(self):
         w=[word(10,11,"離れた")]

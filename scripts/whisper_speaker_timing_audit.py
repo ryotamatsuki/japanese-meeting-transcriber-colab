@@ -71,22 +71,27 @@ def _validate_regions(regions, *, exclusive=True):
 
 def _frozen_words(asr):
     original=extract_words(asr)
-    # Legacy sorts words by inferred start. Reject word order inversions instead
-    # of making a silently different text sequence for another arm.
+    # Production legacy sorts by (onset, end), including occasional Whisper
+    # non-monotonic token timestamps. Freeze THAT exact order across every arm.
+    # Never silently compare source-order text against timeline-order labels.
     ordered=sorted(original,key=lambda w:(w["start"],w["end"]))
-    if [w["text"] for w in original]!=[w["text"] for w in ordered]:
-        raise ValueError("Word timestamp inversions would change lexical order")
+    onset_inversions=sum(a is not b for a,b in zip(original,ordered))
     for w in ordered:
         if not (math.isfinite(w["start"]) and math.isfinite(w["end"])
                 and w["start"] >= 0 and w["end"] >= w["start"]):
             raise ValueError("Invalid word timestamp")
-    normalized=normalized_ja("".join(w["text"] for w in original))
+    normalized=normalized_ja("".join(w["text"] for w in ordered))
     if not normalized:
         raise ValueError("Empty lexical output")
-    return original,normalized
+    return ordered,normalized,onset_inversions
 
 
 def _assign(words, regions, rule):
+    """Independent EXACT legacy attribution + diagnostic alternatives.
+
+    Legacy groups cumulative overlap by raw speaker ID, not individual regions.
+    The nearest gap fallback searches only [idx-1:idx+2] as in production.
+    """
     ordered=_validate_regions(regions)
     labels={}
     for r in ordered:
@@ -99,43 +104,52 @@ def _assign(words, regions, rule):
     votes_tied=0
     boundary_distances=[]
     for w in words:
-        a,b=w["start"],w["end"]
+        a=float(w["start"])
+        b=max(a,float(w["end"]))
         idx=bisect_right(ends,a)
-        overlaps=[]
-        for r in ordered[max(0,idx-1):]:
-            if r["start"]>=max(a+.01,b):
-                break
+        votes={}
+        j=idx
+        while j<len(ordered) and ordered[j]["start"]<max(a+.01,b):
+            r=ordered[j]
             overlap=max(0.,min(b,r["end"])-max(a,r["start"]))
             if overlap>0:
-                overlaps.append((overlap,r))
+                votes[r["speaker_id"]]=votes.get(r["speaker_id"],0.)+overlap
+            j+=1
+        if not votes:
+            gaps+=1
         picks=[]
         if rule in ("legacy","vote_no_fallback"):
-            best=max((x[0] for x in overlaps),default=0.)
-            picks=[x[1] for x in overlaps if abs(x[0]-best)<=1e-9]
+            if votes:
+                highest=max(votes.values())
+                picks=[raw for raw,score in votes.items() if score==highest]
         else:
             t = a if rule=="onset" else (a+b)*.5 if rule=="midpoint" else max(a,b-1e-6)
-            picks=[r for r in ordered if r["start"]<=t<r["end"]]
-        if not overlaps:
-            gaps+=1
+            picks=[r["speaker_id"] for r in ordered if r["start"]<=t<r["end"]]
         if len(picks)>1:
             votes_tied+=1
         if picks:
-            who=labels[picks[0]["speaker_id"]]
+            who=labels[picks[0]]
         elif rule=="vote_no_fallback":
-            who="話者不明";unknown+=1
+            who="話者不明"
+            unknown+=1
         else:
-            # Match the legacy closest-region fallback (1.2 seconds).
+            # Exact legacy fallback uses only near regions, not global nearest.
             center=(a+b)*.5
-            nearest=min(ordered,key=lambda r:max(r["start"]-center,0,center-r["end"]))
-            distance=max(nearest["start"]-center,0,center-nearest["end"])
-            if distance<=1.2:
-                who=labels[nearest["speaker_id"]]
+            near=ordered[max(idx-1,0):min(idx+2,len(ordered))]
+            if not near:
+                who="話者不明"
+                unknown+=1
             else:
-                who="話者不明";unknown+=1
+                chosen=min(near,key=lambda r:max(r["start"]-center,0,center-r["end"]))
+                distance=max(chosen["start"]-center,0,center-chosen["end"])
+                if distance<=1.2:
+                    who=labels[chosen["speaker_id"]]
+                else:
+                    who="話者不明"
+                    unknown+=1
         result.append({**w,"speaker":who})
-        # Measured proximity to automatic speaker turn, NOT word timing accuracy.
         boundary_distances.append(min(
-            (abs((a+b)*.5 - r["start"]) for r in ordered[1:]),default=float("inf")))
+            (abs((a+b)*.5-r["start"]) for r in ordered[1:]),default=float("inf")))
     return result,{"unknown_words":unknown,"words_without_region_overlap":gaps,
                    "tied_overlap_vote_words":votes_tied,
                    "words_center_within_150ms_of_auto_region_start":sum(x<=.15 for x in boundary_distances),
@@ -163,10 +177,10 @@ def _shift(regions,offset,duration):
     return _validate_regions(shifted)
 
 
-def evaluate(reference,asr,exclusive,*,duration):
+def evaluate(reference,asr,exclusive,*,duration,regular=None):
     if not (math.isfinite(duration) and 1<=duration<=3600):
         raise ValueError("Invalid recording duration")
-    original,frozen=_frozen_words(asr)
+    original,frozen,onset_inversions=_frozen_words(asr)
     exclusive=_validate_regions(exclusive)
     legacy,_,count=assign_and_group(asr,exclusive,True)
     if count!=len(original) or normalized_ja("".join(r["text"] for r in legacy))!=frozen:
@@ -174,11 +188,22 @@ def evaluate(reference,asr,exclusive,*,duration):
     measured_baseline=permutation_cer(reference,legacy)
     report={}
     chosen_by_rule={}
+    chosen_baseline_words=None
     for rule in RULES:
         assigned,diag=_assign(original,exclusive,rule)
+        if rule=="legacy":
+            chosen_baseline_words=assigned
         scores=_score(reference,assigned,frozen)
         report[rule]={**scores,**diag}
         chosen_by_rule[rule]=[w["speaker"] for w in assigned]
+    if regular is not None:
+        from transcriber.boundary_attribution import guarded_boundary_repair
+        # Run only on the identical baseline word labels. Text and timestamps
+        # remain frozen; Regular regions prevent deleting true overlap speech.
+        guarded,audit=guarded_boundary_repair(
+            chosen_baseline_words,exclusive,regular=regular)
+        report["guarded_boundary"]={**_score(reference,guarded,frozen),**audit}
+        chosen_by_rule["guarded_boundary"]=[w["speaker"] for w in guarded]
     if report["legacy"]["edits"]!=measured_baseline["edit_distance"]:
         raise ValueError("Independent legacy assignment did not reproduce baseline")
     # Exactly the same policy, replace ONLY automatic speaker regions with
@@ -201,10 +226,13 @@ def evaluate(reference,asr,exclusive,*,duration):
     if shifts[str(0.)]["edits"]!=report["legacy"]["edits"]:
         raise AssertionError("Zero shift does not reproduce baseline")
     disagree={}
-    for rule in RULES[1:]:
+    for rule in chosen_by_rule:
+        if rule=="legacy":
+            continue
         disagree[rule]=sum(a!=b for a,b in zip(chosen_by_rule["legacy"],chosen_by_rule[rule]))
     return {"reference_characters":measured_baseline["reference_characters"],
             "word_count":len(original),
+            "source_vs_timeline_order_repositions":onset_inversions,
             "lexical_sha256":hashlib.sha256(frozen.encode("utf8")).hexdigest(),
             "rules":report,"disagreement_words_vs_legacy":disagree,
             "shift_sensitivity_diagnostic_only":shifts,
