@@ -71,19 +71,19 @@ def _validate_regions(regions, *, exclusive=True):
 
 def _frozen_words(asr):
     original=extract_words(asr)
-    # Legacy sorts words by inferred start. Reject word order inversions instead
-    # of making a silently different text sequence for another arm.
+    # Production legacy sorts by (onset, end), including occasional Whisper
+    # non-monotonic token timestamps. Freeze THAT exact order across every arm.
+    # Never silently compare source-order text against timeline-order labels.
     ordered=sorted(original,key=lambda w:(w["start"],w["end"]))
-    if [w["text"] for w in original]!=[w["text"] for w in ordered]:
-        raise ValueError("Word timestamp inversions would change lexical order")
+    onset_inversions=sum(a is not b for a,b in zip(original,ordered))
     for w in ordered:
         if not (math.isfinite(w["start"]) and math.isfinite(w["end"])
                 and w["start"] >= 0 and w["end"] >= w["start"]):
             raise ValueError("Invalid word timestamp")
-    normalized=normalized_ja("".join(w["text"] for w in original))
+    normalized=normalized_ja("".join(w["text"] for w in ordered))
     if not normalized:
         raise ValueError("Empty lexical output")
-    return original,normalized
+    return ordered,normalized,onset_inversions
 
 
 def _assign(words, regions, rule):
@@ -166,7 +166,7 @@ def _shift(regions,offset,duration):
 def evaluate(reference,asr,exclusive,*,duration,regular=None):
     if not (math.isfinite(duration) and 1<=duration<=3600):
         raise ValueError("Invalid recording duration")
-    original,frozen=_frozen_words(asr)
+    original,frozen,onset_inversions=_frozen_words(asr)
     exclusive=_validate_regions(exclusive)
     legacy,_,count=assign_and_group(asr,exclusive,True)
     if count!=len(original) or normalized_ja("".join(r["text"] for r in legacy))!=frozen:
@@ -218,6 +218,7 @@ def evaluate(reference,asr,exclusive,*,duration,regular=None):
         disagree[rule]=sum(a!=b for a,b in zip(chosen_by_rule["legacy"],chosen_by_rule[rule]))
     return {"reference_characters":measured_baseline["reference_characters"],
             "word_count":len(original),
+            "source_vs_timeline_order_repositions":onset_inversions,
             "lexical_sha256":hashlib.sha256(frozen.encode("utf8")).hexdigest(),
             "rules":report,"disagreement_words_vs_legacy":disagree,
             "shift_sensitivity_diagnostic_only":shifts,
