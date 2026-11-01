@@ -41,6 +41,12 @@ def guarded_boundary_repair(words, exclusive, *, regular=None,
     if regular is None:
         raise ValueError("Regular diarization required to detect acoustic overlap")
     ordered=[dict(w) for w in words]
+    if not regular:
+        # Missing Regular acoustic evidence is not proof that there was no
+        # simultaneous speech; therefore do not rewrite any speaker label.
+        return ordered,{"examined_words":len(ordered),"relabeled_words":0,
+                        "island_candidates":0,
+                        "rejected":{"regular_diarization_missing":1}}
     region=sorted(exclusive,key=lambda x:(float(x["start"]),float(x["end"])))
     regular=sorted(regular,key=lambda x:(float(x["start"]),float(x["end"])))
     if not region or not ordered:
