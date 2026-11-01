@@ -1,3 +1,5 @@
+# Trigger-once after verified A10 startup smoke Run 41259818763.
+# Keeps original frozen models and evaluates the three pinned research samples.
 name: One shot - frozen Whisper Community word timing actual A10
 on:
   push:
