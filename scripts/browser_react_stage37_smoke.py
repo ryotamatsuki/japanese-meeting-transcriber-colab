@@ -75,6 +75,12 @@ def main():
             desktop.goto(url,wait_until="networkidle")
             desktop.get_by_text("会議の記録を、もっとスマートに。").wait_for()
             desktop.get_by_text("プロジェクト定例会議_サンプル.wav").first.wait_for()
+            trial=desktop.get_by_role("checkbox",name="短い話者切替の補正を試す")
+            assert not trial.is_checked(),"Experimental speaker smoothing must be OFF by default"
+            trial.check()
+            assert trial.is_checked(),"Experimental mode must be explicitly selectable"
+            trial.uncheck()
+            assert not trial.is_checked(),"User must be able to restore baseline"
             desktop.screenshot(path=str(OUT/"dashboard.png"),full_page=True)
             desktop.get_by_role("button",name="編集する").first.click()
             desktop.get_by_role("heading",name="文字起こし",exact=True).wait_for()
