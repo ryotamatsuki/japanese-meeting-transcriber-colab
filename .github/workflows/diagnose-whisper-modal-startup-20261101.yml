@@ -1,0 +1,48 @@
+name: Diagnose one-shot Whisper Modal startup (metadata only)
+on:
+  push:
+    branches:
+      - fix/whisper-modal-container-startup-20261101
+    paths:
+      - .github/workflows/diagnose-whisper-modal-startup-20261101.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect_startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install modal==1.4.3
+      - name: Inspect only recent startup exception classes (no transcripts)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${MODAL_TOKEN_ID:-}" && test -n "${MODAL_TOKEN_SECRET:-}"
+          timeout 60s modal app logs kiroku-whisper-timing-audit-20261101 --since 4h --source stderr --tail 1000 > /tmp/stderr.log 2>/tmp/cli-error.log || true
+          python - <<'PY'
+          import pathlib,re
+          messages=(pathlib.Path('/tmp/stderr.log').read_text(errors='replace') + '\n' +
+                    pathlib.Path('/tmp/cli-error.log').read_text(errors='replace'))
+          patterns={
+            'missing_python_module':r"ModuleNotFoundError:\s*No module named ['\"]([A-Za-z0-9_.]+)['\"]",
+            'missing_python_file':r"FileNotFoundError:.*?(requirements-modal[.]lock|[A-Za-z0-9_./-]+[.]py)",
+            'import_error':r"ImportError:\s*cannot import name ['\"]([A-Za-z0-9_.]+)['\"]",
+            'oom':r"(OutOfMemoryError|out of memory|OOMKilled)",
+            'startup_timeout':r"(startup[_ ]timeout|timed out during startup)",
+            'cuda_error':r"(CUDA initialization error|CUDA driver initialization failed)",
+            'no_cuda':r"(No CUDA GPUs are available)",
+            'container_crash':r"(crash.loop|Runner failed with exception)",
+          }
+          print('RAW_LOG_BYTES=',len(messages.encode()))
+          for name,pat in patterns.items():
+            matches=re.findall(pat,messages,re.IGNORECASE)
+            print('CLASS',name,'COUNT',len(matches),'SAFE_DETAILS',sorted(set(matches))[:5])
+          print('TRACEBACK_MARKERS=',messages.count('Traceback (most recent call last)'))
+          PY
