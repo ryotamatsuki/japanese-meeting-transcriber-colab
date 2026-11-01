@@ -41,6 +41,11 @@ jobs:
             'container_crash':r"(crash.loop|Runner failed with exception)",
           }
           print('RAW_LOG_BYTES=',len(messages.encode()))
+          if len(messages)<2048 and not any(s in messages for s in ('reference.txt','input.mp3','HF_TOKEN=')):
+            safe=re.sub(r'https?://\\S+', '[URL]', messages)
+            safe=re.sub(r'(?i)(token|secret|password|key)\\s*[=:]\\s*\\S+', r'\\1=[REDACTED]',safe)
+            safe=re.sub(r'\\b[A-Za-z0-9_.+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b','[EMAIL]',safe)
+            print('SANITIZED_CLI_RESPONSE',repr(safe[:1000]))
           for line in messages.splitlines():
             if any(k in line for k in ('Usage:', 'Error:', 'No such', 'not found', 'deprecated', 'warning:', 'Usage:')):
               print('SANITIZED_CLI_LINE', re.sub(r'(?i)(token|secret|password|key)\\s*[=:]\\s*\\S+',r'\\1=[REDACTED]',line)[:240])
