@@ -198,7 +198,8 @@ def create_app(backend, *, password: str | None = None, session_secret: str, ano
             async with lock:
                 return public_job(await asyncio.to_thread(safe,backend.new_job,data['filename'],data['size'],
                             data.get('diarization',True),data.get('speakers',0),
-                            owner=owner_for(req)))
+                            owner=owner_for(req),
+                            speaker_stability=data.get('speaker_stability',False)))
         except (ValueError,KeyError,TypeError):
             raise HTTPException(400,'Invalid job details') from None
 
