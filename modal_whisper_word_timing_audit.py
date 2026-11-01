@@ -54,6 +54,7 @@ def run_audit():
             for item in manifest["records"]:
                 row={"record_id":item["id"],"status":"failed"}
                 rows.append(row)
+                stage="read_source"
                 try:
                     original=archive.read(item["id"]+"/preview.mp3")
                     human=archive.read(item["id"]+"/reference.txt")
@@ -73,17 +74,21 @@ def run_audit():
                          "prefix":"audit"}
                     asr_metrics={}
                     start=time.perf_counter()
+                    stage="asr"
                     transcribe(job,config,Path("/models/whisper"),asr_metrics)
                     asr_seconds=time.perf_counter()-start
                     start=time.perf_counter()
+                    stage="diarization"
                     diarize(job,config,os.environ["HF_TOKEN"],{})
                     diar_seconds=time.perf_counter()-start
                     # J-CRe3 preview audio duration is provided by Whisper decoding.
                     duration=float(asr_metrics["audio_seconds"])
+                    stage="regular_regions"
                     regular_path=root/"pyannote_通常話者区間.json"
                     if not regular_path.is_file():
                         raise ValueError("Community-1 Regular regions required for safe repair")
                     regular=json.loads(regular_path.read_text(encoding="utf-8"))["segments"]
+                    stage="frozen_timing_evaluation"
                     result=evaluate(ref,job["asr_segments"],job["diar_segments"],
                                     duration=duration,regular=regular)
                     # Audit text must never enter GitHub metadata or stdout.
@@ -92,9 +97,26 @@ def run_audit():
                                 "asr_seconds":round(asr_seconds,3),
                                 "diarization_seconds":round(diar_seconds,3),
                                 **result})
-                except BaseException as error:
+                except Exception as error:
                     row["failure_class"]=type(error).__name__
-                    row["failure_stage"]="whisper_diarization_or_attribution"
+                    row["failure_stage"]=stage
+                    safe_reasons={
+                        "Word timestamp inversions would change lexical order",
+                        "Legacy baseline is not lexically identical",
+                        "Independent legacy assignment did not reproduce baseline",
+                        "Invalid Exclusive speaker region",
+                        "Invalid speaker region",
+                        "Invalid word timestamp",
+                        "Invalid or unordered word timestamp",
+                        "Overlapping diarization supplied as Exclusive",
+                        "No ASR words available",
+                        "No diarization regions",
+                        "Empty lexical output",
+                        "ASR word text was changed",
+                    }
+                    raw_reason=str(error)
+                    row["failure_reason"]=(raw_reason if raw_reason in safe_reasons
+                        else "unclassified_error_no_untrusted_text_logged")
                 gc.collect()
     done=len(rows)==3 and all(r["status"]=="success" for r in rows)
     return {"completed":done,"dataset":"J-CRe3 previously examined development corpus",
@@ -151,7 +173,9 @@ def main(output:str):
                      "midpoint_cpcer":r.get("rules",{}).get("midpoint",{}).get("cpcer"),
                      "onset_cpcer":r.get("rules",{}).get("onset",{}).get("cpcer"),
                      "end_cpcer":r.get("rules",{}).get("end",{}).get("cpcer"),
-                     "failure_class":r.get("failure_class")} for r in data["rows"]]},
+                     "failure_class":r.get("failure_class"),
+                     "failure_stage":r.get("failure_stage"),
+                     "failure_reason":r.get("failure_reason")} for r in data["rows"]]},
         ensure_ascii=False,sort_keys=True))
     if not data["completed"]:
         raise RuntimeError("One or more research samples failed; do not claim full evaluation")
