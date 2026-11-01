@@ -38,10 +38,10 @@ class WhisperAuditImageStartupTests(unittest.TestCase):
         audit = image_expr(SOURCE, "image")
         baseline = image_expr(BASELINE, "gpu_image")
         # Only the mounted Python source package set is permitted to differ.
-        audit_common = audit.replace("'scripts', 'transcriber'", "'beta', 'transcriber'")
+        audit_common = audit.replace("'beta', 'transcriber', 'scripts'", "'beta', 'transcriber'")
         self.assertEqual(audit_common, baseline)
-        self.assertIn("'scripts', 'transcriber'", audit)
-        self.assertNotIn("'beta', 'transcriber'", audit)
+        self.assertIn("'beta', 'transcriber', 'scripts'", audit)
+        self.assertNotIn("beta_modal_anonymous", audit)
 
     def test_audit_never_deploys_web_app(self):
         source = SOURCE.read_text(encoding="utf-8")
