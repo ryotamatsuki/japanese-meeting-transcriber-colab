@@ -163,7 +163,7 @@ def _shift(regions,offset,duration):
     return _validate_regions(shifted)
 
 
-def evaluate(reference,asr,exclusive,*,duration):
+def evaluate(reference,asr,exclusive,*,duration,regular=None):
     if not (math.isfinite(duration) and 1<=duration<=3600):
         raise ValueError("Invalid recording duration")
     original,frozen=_frozen_words(asr)
@@ -174,11 +174,22 @@ def evaluate(reference,asr,exclusive,*,duration):
     measured_baseline=permutation_cer(reference,legacy)
     report={}
     chosen_by_rule={}
+    chosen_baseline_words=None
     for rule in RULES:
         assigned,diag=_assign(original,exclusive,rule)
+        if rule=="legacy":
+            chosen_baseline_words=assigned
         scores=_score(reference,assigned,frozen)
         report[rule]={**scores,**diag}
         chosen_by_rule[rule]=[w["speaker"] for w in assigned]
+    if regular is not None:
+        from transcriber.boundary_attribution import guarded_boundary_repair
+        # Run only on the identical baseline word labels. Text and timestamps
+        # remain frozen; Regular regions prevent deleting true overlap speech.
+        guarded,audit=guarded_boundary_repair(
+            chosen_baseline_words,exclusive,regular=regular)
+        report["guarded_boundary"]={**_score(reference,guarded,frozen),**audit}
+        chosen_by_rule["guarded_boundary"]=[w["speaker"] for w in guarded]
     if report["legacy"]["edits"]!=measured_baseline["edit_distance"]:
         raise ValueError("Independent legacy assignment did not reproduce baseline")
     # Exactly the same policy, replace ONLY automatic speaker regions with
@@ -201,7 +212,9 @@ def evaluate(reference,asr,exclusive,*,duration):
     if shifts[str(0.)]["edits"]!=report["legacy"]["edits"]:
         raise AssertionError("Zero shift does not reproduce baseline")
     disagree={}
-    for rule in RULES[1:]:
+    for rule in chosen_by_rule:
+        if rule=="legacy":
+            continue
         disagree[rule]=sum(a!=b for a,b in zip(chosen_by_rule["legacy"],chosen_by_rule[rule]))
     return {"reference_characters":measured_baseline["reference_characters"],
             "word_count":len(original),
